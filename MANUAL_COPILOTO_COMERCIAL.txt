@@ -1,0 +1,46 @@
+MANUAL DE USO | COPILOTO COMERCIAL RM
+
+Objetivo
+El Copiloto Comercial ayuda al equipo de Retail Media a priorizar oportunidades por categoría. No reemplaza el criterio comercial, pero ordena las conversaciones usando datos de GMV, inversión RM y benchmark por gerencia.
+
+Solapas
+1. 📊 Dashboard Ejecutivo
+   Visión general del negocio: inversión, evolución, top marcas y performance agregada.
+
+2. 📈 Análisis por Categoría
+   Vista analítica para comparar GMV, inversión, A/S Ratio y benchmarks. Sirve para explorar y validar datos.
+
+3. 🤖 Copiloto Comercial
+   Vista prescriptiva. Ordena categorías por prioridad y sugiere acciones comerciales.
+
+Cómo interpretar el Copiloto
+- Potencial: se calcula por percentiles de GMV. Alto = categorías del tramo superior; Medio = tramo central; Bajo = tramo inferior.
+- Benchmark Gerencia: A/S Ratio promedio de la gerencia a la que pertenece la categoría.
+- Brecha: diferencia entre benchmark y A/S Ratio de la categoría. Si la brecha es positiva, existe espacio para incrementar monetización.
+- Score: ranking de prioridad. A mayor score, mayor prioridad comercial sugerida.
+- Estado: diagnóstico en lenguaje comercial.
+- Acción recomendada: próximo paso sugerido para el equipo comercial.
+
+Estados
+- Prioridad alta: categoría relevante con monetización muy por debajo de su gerencia o sin inversión RM.
+- Gran oportunidad: categoría de alto potencial con espacio claro para crecer.
+- Oportunidad: categoría media con brecha relevante.
+- Saludable: inversión alineada al benchmark de su gerencia.
+- Revisar concentración: inversión por encima del benchmark; revisar eficiencia y concentración.
+- Estable: baja prioridad salvo oportunidad táctica.
+
+Uso recomendado semanal
+1. Abrir la solapa 🤖 Copiloto Comercial.
+2. Revisar las 10 categorías con mayor prioridad.
+3. Convertirlas en agenda comercial: proveedor, argumento, formato y propuesta.
+4. Usar la solapa 📈 Análisis por Categoría para validar el detalle antes de negociar.
+5. Actualizar manualmente con el botón si hubo cambios recientes en el Sheet.
+
+Frecuencia de datos
+La app actualiza automáticamente cada 6 horas, y también permite actualización manual con el botón del dashboard.
+
+
+Actualización de usabilidad:
+- La columna Recomendación muestra una acción corta para mejorar lectura.
+- Para ver el detalle completo, hacer clic en "Ver detalle" dentro de la fila.
+- El detalle abre una ventana con explicación, brecha, benchmark, oportunidad potencial y próximos pasos sugeridos.
