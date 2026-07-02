@@ -1,0 +1,162 @@
+MANUAL DE USO | COPILOTO COMERCIAL RM
+
+Objetivo
+El Copiloto Comercial ayuda al equipo de Retail Media a priorizar oportunidades por categoría. No reemplaza el criterio comercial, pero ordena las conversaciones usando datos de GMV, inversión RM, A/S Ratio, benchmark por gerencia y oportunidad potencial en pesos.
+
+Solapas
+1. 📊 Dashboard Ejecutivo
+   Visión general del negocio: inversión, evolución, top marcas y performance agregada.
+
+2. 📈 Análisis por Categoría
+   Vista analítica para comparar GMV, inversión, A/S Ratio y benchmarks. Sirve para explorar y validar datos.
+
+3. 🤖 Copiloto Comercial
+   Vista prescriptiva. Ordena categorías por prioridad y sugiere acciones comerciales.
+
+------------------------------------------------------------
+RACIONAL DEL COPILOTO | DETALLE POR CATEGORÍA
+------------------------------------------------------------
+
+1. Potencial
+El Potencial mide el tamaño relativo de la categoría dentro del negocio, usando GMV YTD.
+
+No se usa un monto fijo porque el negocio cambia con el tiempo. En su lugar se usan percentiles de GMV:
+
+- Potencial Alto: categorías ubicadas en el 25% superior de GMV.
+- Potencial Medio: categorías ubicadas entre el percentil 25 y el percentil 75.
+- Potencial Bajo: categorías ubicadas en el 25% inferior de GMV.
+
+Lectura comercial:
+- Alto: categoría relevante para priorizar conversaciones comerciales.
+- Medio: categoría con escala suficiente para desarrollar oportunidades selectivas.
+- Bajo: categoría de menor escala; priorizar solo si existe una oportunidad táctica o pedido específico.
+
+2. Benchmark Gerencia
+El benchmark es el A/S Ratio promedio de la gerencia a la que pertenece la categoría.
+
+A/S Ratio = Inversión Retail Media / GMV
+
+El objetivo es comparar cada categoría contra su propio contexto comercial, no contra un umbral fijo. Una categoría de Tecnología, HJ o JC puede tener dinámicas de monetización distintas, por eso el benchmark se calcula por gerencia.
+
+3. Brecha
+La brecha compara el A/S Ratio de la categoría contra el benchmark de su gerencia.
+
+Brecha = Benchmark Gerencia - A/S Ratio Categoría
+
+- Brecha positiva: la categoría está por debajo del benchmark y puede tener espacio para incrementar inversión.
+- Brecha cercana a cero: la categoría está alineada con el promedio de su gerencia.
+- Brecha negativa: la categoría está por encima del benchmark; conviene revisar eficiencia o concentración.
+
+4. Oportunidad potencial en pesos
+La oportunidad potencial estima cuánto podría crecer la inversión RM si la categoría alcanzara el benchmark de su gerencia.
+
+Inversión esperada = GMV Categoría × Benchmark Gerencia
+Oportunidad potencial = Inversión esperada - Inversión RM actual
+
+Si el resultado es negativo, se considera oportunidad potencial cero.
+
+Ejemplo:
+- GMV: $10.000 M
+- Benchmark Gerencia: 0,30%
+- Inversión esperada: $30 M
+- Inversión actual: $12 M
+- Oportunidad potencial: $18 M
+
+Esta métrica tiene alta importancia porque traduce la oportunidad comercial a pesos, no solo a ratio.
+
+5. Score
+El Score prioriza las categorías según el valor económico de la oportunidad y la distancia contra el benchmark.
+
+Racional actual del Score:
+- 60% Oportunidad potencial en pesos.
+- 25% Brecha relativa contra el benchmark de gerencia.
+- 10% Potencial de GMV.
+- 5% Actividad comercial / marcas activas.
+
+Por qué se pondera así:
+- La oportunidad potencial en pesos tiene mayor peso porque el objetivo del Copiloto es orientar el esfuerzo comercial hacia las categorías con mayor impacto económico.
+- La brecha contra benchmark indica cuán submonetizada está la categoría respecto de su propia gerencia.
+- El potencial de GMV evita sobredimensionar categorías chicas.
+- La actividad comercial ayuda a diferenciar categorías con mayor base de marcas/campañas.
+
+Lectura del Score:
+- 80 a 100: prioridad comercial alta.
+- 65 a 79: gran oportunidad.
+- 45 a 64: oportunidad o situación a revisar.
+- Menos de 45: prioridad baja o categoría estable.
+
+Importante: el Score no busca medir performance de campaña. Busca ordenar oportunidades comerciales para definir dónde concentrar el esfuerzo de venta.
+
+6. Estado
+El Estado traduce el Score y la situación de monetización a una recomendación accionable.
+
+Estados posibles:
+
+- Prioridad alta
+  Categoría de alto o medio potencial, con oportunidad económica relevante, sin inversión RM o muy por debajo del benchmark.
+  Acción sugerida: activar propuesta comercial o priorizar reunión con marcas principales.
+
+- Gran oportunidad
+  Categoría con oportunidad clara de crecimiento, aunque no necesariamente en el primer nivel de prioridad.
+  Acción sugerida: incrementar inversión, ampliar cobertura comercial o revisar mix de formatos.
+
+- Oportunidad
+  Categoría con brecha relevante, generalmente de potencial medio o menor urgencia.
+  Acción sugerida: desarrollar nuevas marcas, sumar campañas o probar formatos incrementales.
+
+- Saludable
+  Categoría alineada al benchmark de su gerencia.
+  Acción sugerida: mantener estrategia y monitorear evolución mensual.
+
+- Revisar concentración
+  Categoría con A/S Ratio muy por encima del benchmark.
+  Acción sugerida: revisar eficiencia, concentración de inversión, performance y diversificación de marcas.
+
+- Estable
+  Categoría de menor potencial o sin señales claras de oportunidad inmediata.
+  Acción sugerida: no priorizar salvo oportunidad táctica o pedido específico.
+
+------------------------------------------------------------
+CÓMO USARLO EN LA GESTIÓN COMERCIAL
+------------------------------------------------------------
+
+Uso recomendado semanal
+1. Abrir la solapa 🤖 Copiloto Comercial.
+2. Filtrar por gerencia si se quiere preparar una reunión o agenda específica.
+3. Ordenar por Score u oportunidad potencial.
+4. Revisar las categorías con Estado “Prioridad alta” y “Gran oportunidad”.
+5. Abrir “Ver detalle y motivos” para entender el racional antes de contactar a la marca.
+6. Usar la solapa 📈 Análisis por Categoría para validar datos duros antes de negociar.
+7. Convertir las oportunidades en agenda comercial: categoría, marca/proveedor, argumento, formato y propuesta.
+
+Recomendación práctica
+El Copiloto debe usarse como una guía para priorizar conversaciones, no como una decisión automática. Antes de presentar una propuesta, validar:
+- marcas activas y marcas potenciales;
+- estacionalidad de la categoría;
+- calendario comercial;
+- stock y surtido;
+- performance histórica de campañas;
+- objetivos del proveedor o JBP.
+
+Frecuencia de datos
+La app actualiza automáticamente cada 6 horas, y también permite actualización manual con el botón del dashboard.
+
+Usabilidad
+- La columna Acción recomendada muestra una acción corta para mejorar lectura.
+- Para ver el detalle completo, hacer clic en “Ver detalle y motivos”.
+- El detalle abre una ventana con explicación, benchmark, brecha, oportunidad potencial y próximos pasos sugeridos.
+
+Actualización V2.8 - Exclusión de gerencias no accionables
+----------------------------------------------------------
+Para mejorar la calidad de lectura y evitar ruido en el análisis comercial, las visualizaciones del dashboard excluyen los registros cuya gerencia sea:
+
+- N/A
+- Sin categorizar
+
+Alcance de la exclusión:
+- No aparecen en el filtro de Gerencia.
+- No aparecen en el Detalle del Copiloto Comercial por Categoría.
+- No aparecen en rankings, benchmarks por gerencia ni análisis por categoría.
+
+Nota importante:
+Los KPIs globales y la evolución mensual mantienen la lectura completa de la base para preservar consistencia con los totales generales del Sheet. La exclusión aplica sobre las visualizaciones accionables por gerencia/categoría, donde esos valores no aportan una recomendación comercial clara.
