@@ -264,3 +264,70 @@
   #tab-copiloto .card-header-flex { flex-direction: column; }
   #tab-copiloto .card-header-flex .tab-intro { text-align: left; }
 }
+
+/* V2.6: corrección de lectura en Copiloto */
+#tab-copiloto .table-container { overflow-x: auto; }
+#exhCatTable { width: 100% !important; table-layout: fixed !important; }
+#exhCatTable th, #exhCatTable td { box-sizing: border-box; }
+#exhCatTable th:nth-child(1), #exhCatTable td:nth-child(1) { width: 20% !important; }
+#exhCatTable th:nth-child(2), #exhCatTable td:nth-child(2) { width: 10% !important; }
+#exhCatTable th:nth-child(3), #exhCatTable td:nth-child(3) { width: 9% !important; }
+#exhCatTable th:nth-child(4), #exhCatTable td:nth-child(4) { width: 7% !important; }
+#exhCatTable th:nth-child(5), #exhCatTable td:nth-child(5) { width: 9% !important; }
+#exhCatTable th:nth-child(6), #exhCatTable td:nth-child(6) { width: 8% !important; }
+#exhCatTable th:nth-child(7), #exhCatTable td:nth-child(7) { width: 7% !important; }
+#exhCatTable th:nth-child(8), #exhCatTable td:nth-child(8) { width: 8% !important; }
+#exhCatTable th:nth-child(9), #exhCatTable td:nth-child(9) { width: 10% !important; }
+#exhCatTable th:nth-child(10), #exhCatTable td:nth-child(10) { width: 12% !important; }
+#exhCatTable .category-wrap { display: grid !important; grid-template-columns: 44px minmax(0, 1fr); gap: 0.75rem; align-items: center; min-width: 0; }
+#exhCatTable .category-avatar { width: 44px; height: 44px; flex: 0 0 44px; }
+#exhCatTable .category-name { display:block; white-space: normal !important; overflow-wrap: anywhere; word-break: normal; line-height: 1.15; }
+#exhCatTable .category-id { display:block; white-space: nowrap; }
+#exhCatTable .metric-main { white-space: normal; overflow-wrap: anywhere; }
+#exhCatTable .action-card { max-width: 100%; overflow: hidden; }
+#exhCatTable .action-title, #exhCatTable .action-detail { overflow-wrap: anywhere; }
+@media (max-width: 1280px) { #exhCatTable { min-width: 1450px !important; } }
+
+/* ===== V2.7 - Más espacio para acción recomendada + sin avatar ===== */
+#exhCatTable .category-wrap.no-avatar {
+    display: block !important;
+    min-width: 0;
+}
+#exhCatTable .category-wrap.no-avatar .category-name {
+    font-size: 0.95rem;
+    line-height: 1.14;
+}
+#exhCatTable .category-wrap.no-avatar .category-id {
+    margin-top: .28rem;
+}
+#exhCatTable .category-avatar { display: none !important; }
+
+#exhCatTable { table-layout: fixed !important; }
+#exhCatTable th:nth-child(1), #exhCatTable td:nth-child(1) { width: 17% !important; }
+#exhCatTable th:nth-child(2), #exhCatTable td:nth-child(2) { width: 10% !important; }
+#exhCatTable th:nth-child(3), #exhCatTable td:nth-child(3) { width: 9% !important; }
+#exhCatTable th:nth-child(4), #exhCatTable td:nth-child(4) { width: 7% !important; }
+#exhCatTable th:nth-child(5), #exhCatTable td:nth-child(5) { width: 8% !important; }
+#exhCatTable th:nth-child(6), #exhCatTable td:nth-child(6) { width: 8% !important; }
+#exhCatTable th:nth-child(7), #exhCatTable td:nth-child(7) { width: 7% !important; }
+#exhCatTable th:nth-child(8), #exhCatTable td:nth-child(8) { width: 8% !important; }
+#exhCatTable th:nth-child(9), #exhCatTable td:nth-child(9) { width: 9% !important; }
+#exhCatTable th:nth-child(10), #exhCatTable td:nth-child(10) { width: 17% !important; }
+
+#exhCatTable .action-card {
+    min-height: 94px;
+    padding: .82rem .9rem;
+}
+#exhCatTable .action-detail {
+    max-height: 4.8em;
+    line-height: 1.25;
+}
+#exhCatTable .action-detail b {
+    color: #F8FAFC;
+    font-weight: 900;
+}
+
+@media (max-width: 1280px) {
+  #exhCatTable { min-width: 1520px !important; }
+  #exhCatTable th:nth-child(10), #exhCatTable td:nth-child(10) { min-width: 300px !important; }
+}
