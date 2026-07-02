@@ -40,6 +40,29 @@
             .replace(/[\u0300-\u036f]/g, '')
             .replace(/\s+/g, ' ');
 
+        // Clave robusta SOLO para resolver diferencias invisibles entre las dos bases.
+        // Importante: no reemplaza el nombre visible ni colapsa categorías; se usa como índice auxiliar.
+        const normalizeKey = (val) => normalizeText(String(val || '').replace(/ /g, ' '))
+            .replace(/[–—-]/g, ' ')
+            .replace(/[()]/g, ' ')
+            .replace(/[^A-Z0-9Ñ ]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+
+        const displayCategory = (val) => String(val || '')
+            .replace(/ /g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .toUpperCase();
+
+
+        const isExcludedGerencia = (val) => {
+            const raw = String(val || '').trim();
+            const txt = normalizeText(raw);
+            const key = normalizeKey(raw);
+            return ['N/A', 'NA', 'N A', 'SIN CATEGORIZAR'].includes(txt) || ['N A', 'NA', 'SIN CATEGORIZAR'].includes(key);
+        };
+
         const normalizeEstado = normalizeText;
 
         const isEstadoValidoFacturacion = (val) => {
@@ -233,7 +256,9 @@
 
                 let marca = cleanMarca(getVal(colMarca));
                 if (marca.toUpperCase() === 'DESCONOCIDO' || marca === '0') return;
-                let categoria = String(getVal(colCat)).trim().toUpperCase();
+                let categoriaRaw = getVal(colCat);
+                let categoria = displayCategory(categoriaRaw);
+                let categoriaKey = normalizeKey(categoriaRaw);
                 let anio = parseYearValue(getVal(colAno));
                 let mes = parseMonthValue(getVal(colMes));
                 // Fallback: si MES/AÑO vienen vacíos o con formato no parseable, derivar desde Fecha.Mes (ej: 202606)
@@ -251,14 +276,17 @@
                 if (anio === 2025 && mes >= 1 && mes <= 12) inv_mensual_2025[mes-1] += inv;
                 if (anio === 2026 && mes >= 1 && mes <= 12) inv_mensual_2026[mes-1] += inv;
 
+                // Gerencia: viene directamente en la hoja CAMPAÑAS (ANUAL).
+                // Para visualizaciones por categoría/copiloto excluimos gerencias no accionables
+                // (N/A o Sin categorizar), pero mantenemos los KPIs globales y mensuales completos.
+                let grupo = 'SIN ASIGNAR';
+                let gerencia = normalizeText(getVal(colGerencia)) || 'SIN ASIGNAR';
+                if (isExcludedGerencia(gerencia)) return;
+
                 // Marcas
                 if (!marcasMap[marca]) marcasMap[marca] = { y25:0, y26:0, y25_ytd:0, y26_ytd:0 };
                 if (anio === 2025) { marcasMap[marca].y25 += inv; if(isYTD) marcasMap[marca].y25_ytd += inv; }
                 if (anio === 2026) { marcasMap[marca].y26 += inv; if(isYTD) marcasMap[marca].y26_ytd += inv; }
-
-                // Gerencia: viene directamente en la hoja CAMPAÑAS (ANUAL)
-                let grupo = 'SIN ASIGNAR';
-                let gerencia = normalizeText(getVal(colGerencia)) || 'SIN ASIGNAR';
                 
                 if (!gruposMap[grupo]) gruposMap[grupo] = { y25:0, y26:0, y25_ytd:0, y26_ytd:0 };
                 if (!gerenciasMap[gerencia]) gerenciasMap[gerencia] = { y25:0, y26:0, y25_ytd:0, y26_ytd:0 };
@@ -272,7 +300,7 @@
                     if(isYTD) { gruposMap[grupo].y26_ytd += inv; gerenciasMap[gerencia].y26_ytd += inv; }
                 }
                 
-                window.validRows.push({ marca: marca, anio: anio, categoria: categoria, inv: inv, isYTD: isYTD, grupo: grupo, gerencia: gerencia });
+                window.validRows.push({ marca: marca, marcaKey: normalizeKey(marca), anio: anio, categoria: categoria, categoriaKey: categoriaKey, inv: inv, isYTD: isYTD, grupo: grupo, gerencia: gerencia, gerenciaKey: normalizeKey(gerencia) });
             });
 
             // Procesar GMV
@@ -286,7 +314,9 @@
                 let mes = parseInt(fechaMes.substring(4, 6)) || 0;
                 let marca = cleanMarca(getVal(1));
                 if (marca.toUpperCase() === 'DESCONOCIDO' || marca === '0') return;
-                let categoria = String(getVal(3)).trim().toUpperCase();
+                let categoriaRaw = getVal(3);
+                let categoria = displayCategory(categoriaRaw);
+                let categoriaKey = normalizeKey(categoriaRaw);
                 let gmv = cleanInv(getVal(5));
                 if (gmv === 0) return;
                 
@@ -295,7 +325,8 @@
                 let grupo = 'SIN ASIGNAR';
                 // GERENCIA viene directamente en la hoja GMV (columna G)
                 let gerencia = normalizeText(getVal(6)) || 'SIN ASIGNAR';
-                window.validRowsGMV.push({ marca: marca, anio: anio, categoria: categoria, gmv: gmv, isYTD: isYTD, grupo: grupo, gerencia: gerencia });
+                if (isExcludedGerencia(gerencia)) return;
+                window.validRowsGMV.push({ marca: marca, marcaKey: normalizeKey(marca), anio: anio, categoria: categoria, categoriaKey: categoriaKey, gmv: gmv, isYTD: isYTD, grupo: grupo, gerencia: gerencia, gerenciaKey: normalizeKey(gerencia) });
             });
 
             // Procesar KPIs Globales
@@ -309,6 +340,7 @@
             };
 
             console.log('Fuentes usadas', {campanas: BASE_URL_CAMP, gmv: BASE_URL_GMV, filasCampanas: rows.length, filasGMV: rowsG ? rowsG.length : 0, colGerencia});
+            console.log('V2.8 - Visualizaciones excluyen gerencias no accionables', {excluidas: ['N/A', 'Sin categorizar']});
             $('#header-subtitle').text(`Conectado en vivo al Checklist. Datos hasta YTD ${rango_ytd_str}`);
             $('#kpi-inv-fy').text(formatMoney(inv_2026_fy));
             $('#kpi-var-fy').html(formatVarHtml(var_fy));
@@ -559,41 +591,70 @@
 
             let gmvMarcaCatMap = {};
             let localCategoriaASMap = {};
+            let localCategoriaKeyIndex = {};
             let localGerenciaASMap = {};
 
-            // Agregar GMV (Solo YTD para Eficiencia)
+            const ensureCategoryBucket = (displayName, normalizedKey, gerencia, gerenciaKey) => {
+                const display = displayCategory(displayName);
+                const norm = normalizedKey || normalizeKey(displayName);
+                let bucketKey = localCategoriaKeyIndex[norm] || display;
+                if (!localCategoriaASMap[bucketKey]) {
+                    localCategoriaASMap[bucketKey] = { nombre: display, key: bucketKey, normalizedKey: norm, gmv: 0, inv: 0, gerencias: {}, gerenciaLabels: {}, marcas: {} };
+                    localCategoriaKeyIndex[norm] = bucketKey;
+                }
+                if (gerencia) {
+                    const gKey = gerenciaKey || normalizeKey(gerencia);
+                    localCategoriaASMap[bucketKey].gerenciaLabels[gKey] = gerencia;
+                }
+                return localCategoriaASMap[bucketKey];
+            };
+
+            // Agregar GMV (Solo YTD para Eficiencia). La categoría visible conserva el texto original.
             window.validRowsGMV.forEach(r => {
                 if (r.anio === 2026 && r.isYTD) {
-                    let key = r.marca + '||' + r.categoria;
-                    if (!gmvMarcaCatMap[key]) gmvMarcaCatMap[key] = { marca: r.marca, categoria: r.categoria, grupo: r.grupo, gerencia: r.gerencia, gmv: 0, inv: 0 };
+                    const catDisplay = displayCategory(r.categoria);
+                    const catNorm = r.categoriaKey || normalizeKey(r.categoria);
+                    const gerKey = r.gerenciaKey || normalizeKey(r.gerencia);
+                    const marcaKey = r.marcaKey || normalizeKey(r.marca);
+                    let key = marcaKey + '||' + catNorm;
+                    if (!gmvMarcaCatMap[key]) gmvMarcaCatMap[key] = { marca: r.marca, marcaKey: marcaKey, categoria: catDisplay, categoriaKey: catNorm, grupo: r.grupo, gerencia: r.gerencia, gerenciaKey: gerKey, gmv: 0, inv: 0 };
                     gmvMarcaCatMap[key].gmv += r.gmv;
                     
+                    const catBucket = ensureCategoryBucket(catDisplay, catNorm, r.gerencia, gerKey);
+                    catBucket.gmv += r.gmv;
+                    catBucket.gerencias[gerKey] = (catBucket.gerencias[gerKey] || 0) + r.gmv;
+                    catBucket.marcas[marcaKey] = true;
 
-                    
-                    if (!localCategoriaASMap[r.categoria]) localCategoriaASMap[r.categoria] = { gmv: 0, inv: 0, gerencias: {}, marcas: {} };
-                    localCategoriaASMap[r.categoria].gmv += r.gmv;
-                    localCategoriaASMap[r.categoria].gerencias[r.gerencia] = (localCategoriaASMap[r.categoria].gerencias[r.gerencia] || 0) + r.gmv;
-                    localCategoriaASMap[r.categoria].marcas[r.marca] = true;
-
-                    if (!localGerenciaASMap[r.gerencia]) localGerenciaASMap[r.gerencia] = { gmv: 0, inv: 0 };
-                    localGerenciaASMap[r.gerencia].gmv += r.gmv;
+                    if (!localGerenciaASMap[gerKey]) localGerenciaASMap[gerKey] = { nombre: r.gerencia, gmv: 0, inv: 0 };
+                    localGerenciaASMap[gerKey].gmv += r.gmv;
                 }
             });
 
-            // Agregar Inversión (Solo YTD para Eficiencia)
+            // Agregar Inversión (Solo YTD para Eficiencia). Se asigna por clave normalizada,
+            // con fallback al nombre visible, para evitar casos como espacios invisibles o signos.
             window.validRows.forEach(r => {
                 if (r.anio === 2026 && r.isYTD) {
-                    let key = r.marca + '||' + r.categoria;
+                    const catDisplay = displayCategory(r.categoria);
+                    const catNorm = r.categoriaKey || normalizeKey(r.categoria);
+                    const gerKey = r.gerenciaKey || normalizeKey(r.gerencia);
+                    const marcaKey = r.marcaKey || normalizeKey(r.marca);
+                    let key = marcaKey + '||' + catNorm;
                     if (gmvMarcaCatMap[key]) gmvMarcaCatMap[key].inv += r.inv;
                     
+                    const catBucket = ensureCategoryBucket(catDisplay, catNorm, r.gerencia, gerKey);
+                    catBucket.inv += r.inv;
+                    catBucket.marcas[marcaKey] = true;
 
-                    if (localCategoriaASMap[r.categoria]) {
-                        localCategoriaASMap[r.categoria].inv += r.inv;
-                        localCategoriaASMap[r.categoria].marcas[r.marca] = true;
-                    }
-                    if (localGerenciaASMap[r.gerencia]) localGerenciaASMap[r.gerencia].inv += r.inv;
+                    if (!localGerenciaASMap[gerKey]) localGerenciaASMap[gerKey] = { nombre: r.gerencia || 'SIN ASIGNAR', gmv: 0, inv: 0 };
+                    localGerenciaASMap[gerKey].inv += r.inv;
                 }
             });
+
+            // Diagnóstico visible en consola para detectar categorías con inversión y sin GMV asociado.
+            window.copilotCategoryDiagnostics = Object.keys(localCategoriaASMap).map(k => localCategoriaASMap[k])
+                .filter(x => x.inv > 0 && x.gmv === 0)
+                .map(x => ({ categoria: x.nombre, inversion: x.inv, normalizedKey: x.normalizedKey }));
+            if (window.copilotCategoryDiagnostics.length) console.warn('Categorías con inversión RM pero sin GMV asociado:', window.copilotCategoryDiagnostics);
 
             let marcasArray = Object.keys(gmvMarcaCatMap).map(k => ({ ...gmvMarcaCatMap[k] }));
             
@@ -603,7 +664,8 @@
                 if (m.gmv === 0 && m.inv === 0) return;
                 let as_ratio = m.gmv > 0 ? (m.inv / m.gmv) : 0;
                 
-                let catAvgAS = localCategoriaASMap[m.categoria] && localCategoriaASMap[m.categoria].gmv > 0 ? (localCategoriaASMap[m.categoria].inv / localCategoriaASMap[m.categoria].gmv) : 0;
+                let catKeyForAvg = localCategoriaKeyIndex[m.categoriaKey || normalizeKey(m.categoria)] || m.categoria;
+                let catAvgAS = localCategoriaASMap[catKeyForAvg] && localCategoriaASMap[catKeyForAvg].gmv > 0 ? (localCategoriaASMap[catKeyForAvg].inv / localCategoriaASMap[catKeyForAvg].gmv) : 0;
                 
                 let as_html = '0.00%';
                 let diff_html = '-';
@@ -757,7 +819,7 @@
                 gmv: localGerenciaASMap[g].gmv,
                 inv: localGerenciaASMap[g].inv,
                 ratio: localGerenciaASMap[g].gmv > 0 ? (localGerenciaASMap[g].inv / localGerenciaASMap[g].gmv) * 100 : 0
-            })).filter(x => (x.gmv > 0 || x.inv > 0) && !['N/A', 'SIN ASIGNAR', 'SIN GERENCIA'].includes(x.nombre)).sort((a,b) => b.ratio - a.ratio);
+            })).filter(x => (x.gmv > 0 || x.inv > 0) && !isExcludedGerencia(x.nombre) && !['SIN ASIGNAR', 'SIN GERENCIA'].includes(x.nombre)).sort((a,b) => b.ratio - a.ratio);
 
             if (window.chartASRatioGerInstance) window.chartASRatioGerInstance.destroy();
             window.chartASRatioGerInstance = new Chart(document.getElementById('asRatioChartGerencia').getContext('2d'), {
@@ -777,18 +839,21 @@
             let cat_table_html = '';
             let as_ratio_categoria_full = Object.keys(localCategoriaASMap).map(g => {
                 const item = localCategoriaASMap[g];
-                const gerencia = Object.keys(item.gerencias || {}).sort((a,b) => (item.gerencias[b] || 0) - (item.gerencias[a] || 0))[0] || 'SIN ASIGNAR';
-                const benchmark = localGerenciaASMap[gerencia] && localGerenciaASMap[gerencia].gmv > 0 ? (localGerenciaASMap[gerencia].inv / localGerenciaASMap[gerencia].gmv) * 100 : 0;
+                const gerKey = Object.keys(item.gerencias || {}).sort((a,b) => (item.gerencias[b] || 0) - (item.gerencias[a] || 0))[0] || 'SIN ASIGNAR';
+                const gerencia = (item.gerenciaLabels && item.gerenciaLabels[gerKey]) || (localGerenciaASMap[gerKey] && localGerenciaASMap[gerKey].nombre) || gerKey;
+                const benchmark = localGerenciaASMap[gerKey] && localGerenciaASMap[gerKey].gmv > 0 ? (localGerenciaASMap[gerKey].inv / localGerenciaASMap[gerKey].gmv) * 100 : 0;
                 return {
-                    nombre: g,
+                    nombre: item.nombre || g,
+                    key: g,
                     gerencia: gerencia,
+                    gerenciaKey: gerKey,
                     gmv: item.gmv,
                     inv: item.inv,
                     ratio: item.gmv > 0 ? (item.inv / item.gmv) * 100 : 0,
                     benchmark: benchmark,
                     marcas: item.marcas || {}
                 };
-            }).filter(x => (x.gmv > 0 || x.inv > 0) && !['N/A', 'SIN ASIGNAR', 'SIN GRUPO'].includes(x.nombre));
+            }).filter(x => (x.gmv > 0 || x.inv > 0) && !['SIN ASIGNAR', 'SIN GRUPO'].includes(x.nombre) && !isExcludedGerencia(x.gerencia));
 
             as_ratio_categoria_full.forEach(c => {
                 cat_table_html += `
@@ -817,9 +882,10 @@
             const gmvValues = as_ratio_categoria_full.map(x => x.gmv).filter(v => v > 0).sort((a,b) => a-b);
             const gmvP25 = percentile(gmvValues, 0.25);
             const gmvP75 = percentile(gmvValues, 0.75);
+            const maxOpportunity = Math.max(0, ...as_ratio_categoria_full.map(c => calculateOpportunityPotential(c)));
             let exh_cat_table_html = '';
-            const copilotRows = as_ratio_categoria_full.map(c => ({ ...c, copilot: evaluateCopilotCategory(c, gmvP25, gmvP75) }))
-                .sort((a,b) => b.copilot.score - a.copilot.score || b.gmv - a.gmv);
+            const copilotRows = as_ratio_categoria_full.map(c => ({ ...c, copilot: evaluateCopilotCategory(c, gmvP25, gmvP75, maxOpportunity) }))
+                .sort((a,b) => b.copilot.score - a.copilot.score || b.copilot.opportunityPotential - a.copilot.opportunityPotential || b.gmv - a.gmv);
 
             window.copilotRowsForModal = copilotRows;
             copilotRows.forEach((c, idx) => {
@@ -831,8 +897,7 @@
                 exh_cat_table_html += `
                 <tr data-gerencia="${c.gerencia || 'SIN ASIGNAR'}">
                     <td class="category-cell">
-                        <div class="category-wrap">
-                            <span class="category-avatar a${idx % 5}">${categoryInitials(c.nombre)}</span>
+                        <div class="category-wrap no-avatar">
                             <span><span class="category-name">${c.nombre}</span><span class="category-id">CAT-${String(idx+1).padStart(3,'0')}</span></span>
                         </div>
                     </td>
@@ -847,7 +912,7 @@
                     <td class="action-cell">
                         <div class="action-card ${actionCardClass(cp.cls)}">
                             <span class="action-title">${shortAction(cp.estado)}</span>
-                            <span class="action-detail">${cp.accion}</span>
+                            <span class="action-detail"><b>Oportunidad potencial: ${formatMoney(cp.opportunityPotential || 0)}</b><br>${cp.accion}</span>
                             <button type="button" class="action-button" data-index="${idx}">Ver detalle y motivos</button>
                         </div>
                     </td>
@@ -891,7 +956,7 @@
             const $select = $('#copilotGerenciaFilter');
             if (!$select.length) return;
             const current = $select.val() || '';
-            const gerencias = Array.from(new Set((rows || []).map(r => r.gerencia || 'SIN ASIGNAR'))).sort((a,b) => String(a).localeCompare(String(b), 'es'));
+            const gerencias = Array.from(new Set((rows || []).map(r => r.gerencia || 'SIN ASIGNAR').filter(g => !isExcludedGerencia(g)))).sort((a,b) => String(a).localeCompare(String(b), 'es'));
             $select.empty().append('<option value="">Todas las gerencias</option>');
             gerencias.forEach(g => $select.append(`<option value="${String(g).replace(/"/g,'&quot;')}">${g}</option>`));
             if (current && gerencias.includes(current)) $select.val(current);
@@ -961,7 +1026,7 @@
                 return `<div class="opportunity-card">
                     <div class="opportunity-rank">${medals[idx]} · ${cp.estado}</div>
                     <div class="opportunity-name">${c.nombre}</div>
-                    <div class="opportunity-meta">Gerencia ${c.gerencia || 'SIN ASIGNAR'}<br>GMV ${formatMoney(c.gmv)}<br>Brecha +${Math.max(cp.brecha,0).toFixed(2)} pp</div>
+                    <div class="opportunity-meta">Gerencia ${c.gerencia || 'SIN ASIGNAR'}<br>Oportunidad ${formatMoney(cp.opportunityPotential || 0)}<br>Brecha +${Math.max(cp.brecha,0).toFixed(2)} pp</div>
                 </div>`;
             }).join('');
             $('#top-opportunities').html(html || '<div class="opportunity-card">Sin datos suficientes para priorizar oportunidades.</div>');
@@ -1022,35 +1087,43 @@
             return `<span class="status-pill ${cls}">${label}</span>`;
         }
 
-        function evaluateCopilotCategory(c, gmvP25, gmvP75) {
+        function calculateOpportunityPotential(c) {
+            const benchmark = c.benchmark || 0;
+            const expectedInv = (benchmark / 100) * (c.gmv || 0);
+            return Math.max(0, expectedInv - (c.inv || 0));
+        }
+
+        function evaluateCopilotCategory(c, gmvP25, gmvP75, maxOpportunity) {
             const benchmark = c.benchmark || 0;
             const ratio = c.ratio || 0;
+            const opportunityPotential = calculateOpportunityPotential(c);
             let potencial = c.gmv >= gmvP75 ? 'Alto' : (c.gmv >= gmvP25 ? 'Medio' : 'Bajo');
             let gapRel = benchmark > 0 ? Math.max(0, (benchmark - ratio) / benchmark) : (c.inv === 0 && c.gmv > 0 ? 1 : 0);
             let brecha = benchmark - ratio;
-            let potentialScore = potencial === 'Alto' ? 40 : (potencial === 'Medio' ? 25 : 10);
-            let gapScore = Math.min(40, gapRel * 40);
-            let activeBrands = c.marcas ? Object.keys(c.marcas).length : 0;
-            let activityScore = Math.min(20, activeBrands * 4); // 5+ marcas activas = máximo
-            let score = Math.round(potentialScore + gapScore + activityScore);
+
+            // V2.7: el score prioriza el valor económico de la oportunidad.
+            // Antes dos categorías sin inversión podían quedar casi empatadas aunque una representara
+            // una oportunidad en pesos mucho mayor. Ahora la oportunidad potencial pesa 60%.
+            const opportunityScore = maxOpportunity > 0 ? Math.sqrt(opportunityPotential / maxOpportunity) * 60 : 0;
+            const gapScore = Math.min(25, gapRel * 25);
+            const potentialScore = potencial === 'Alto' ? 10 : (potencial === 'Medio' ? 6 : 2);
+            const activeBrands = c.marcas ? Object.keys(c.marcas).length : 0;
+            const activityScore = Math.min(5, activeBrands);
+            let score = Math.round(Math.min(100, opportunityScore + gapScore + potentialScore + activityScore));
 
             let estado = 'Saludable', cls = 'status-ok', accion = 'Mantener estrategia actual y monitorear evolución mensual.';
-            if ((potencial === 'Alto' || potencial === 'Medio') && c.inv === 0 && c.gmv > 0) {
-                estado = 'Prioridad alta'; cls = 'status-high';
+            if ((potencial === 'Alto' || potencial === 'Medio') && c.inv === 0 && c.gmv > 0 && opportunityPotential > 0) {
+                estado = score >= 80 ? 'Prioridad alta' : 'Gran oportunidad';
+                cls = score >= 80 ? 'status-high' : 'status-big';
                 accion = 'Activar propuesta comercial: categoría con GMV relevante y sin inversión RM registrada.';
-                score = Math.max(score, 85);
-            } else if (potencial === 'Alto' && benchmark > 0 && ratio <= benchmark * 0.50) {
-                estado = 'Prioridad alta'; cls = 'status-high';
+            } else if (opportunityPotential > 0 && benchmark > 0 && ratio <= benchmark * 0.50) {
+                estado = score >= 80 ? 'Prioridad alta' : 'Gran oportunidad';
+                cls = score >= 80 ? 'status-high' : 'status-big';
                 accion = 'Priorizar reuniones con principales marcas; monetización muy por debajo de su gerencia.';
-                score = Math.max(score, 80);
-            } else if (potencial === 'Alto' && benchmark > 0 && ratio < benchmark * 0.85) {
-                estado = 'Gran oportunidad'; cls = 'status-big';
+            } else if (opportunityPotential > 0 && benchmark > 0 && ratio < benchmark * 0.85) {
+                estado = score >= 65 ? 'Gran oportunidad' : 'Oportunidad';
+                cls = score >= 65 ? 'status-big' : 'status-opp';
                 accion = 'Ampliar cobertura comercial y revisar mix de formatos para acercar el ratio al benchmark.';
-                score = Math.max(score, 70);
-            } else if (potencial === 'Medio' && benchmark > 0 && ratio < benchmark * 0.75) {
-                estado = 'Oportunidad'; cls = 'status-opp';
-                accion = 'Desarrollar nuevas marcas/campañas y validar potencial con la gerencia comercial.';
-                score = Math.max(score, 60);
             } else if (benchmark > 0 && ratio > benchmark * 1.50 && c.inv > 0) {
                 estado = 'Revisar concentración'; cls = 'status-review';
                 accion = 'Analizar eficiencia, concentración de inversión y posibilidad de diversificar marcas.';
@@ -1059,7 +1132,7 @@
                 estado = 'Estable'; cls = 'status-low';
                 accion = 'No priorizar salvo oportunidad táctica o pedido específico de marca.';
             }
-            return { potencial, benchmark, brecha, score, estado, cls, accion, activeBrands };
+            return { potencial, benchmark, brecha, score, estado, cls, accion, activeBrands, opportunityPotential };
         }
 
         function switchMainTab(tabId, btn) {
