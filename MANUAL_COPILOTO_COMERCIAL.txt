@@ -160,3 +160,31 @@ Alcance de la exclusión:
 
 Nota importante:
 Los KPIs globales y la evolución mensual mantienen la lectura completa de la base para preservar consistencia con los totales generales del Sheet. La exclusión aplica sobre las visualizaciones accionables por gerencia/categoría, donde esos valores no aportan una recomendación comercial clara.
+
+============================================================
+REGLA DE DEPURACIÓN DE INVERSIÓN 2025 — DESTINO DE FONDOS
+============================================================
+
+Para los registros del año 2025, el dashboard excluye de todos los cálculos
+los montos cuyo campo "DESTINO DE FONDOS" comience con:
+
+- AJUSTE
+- COOP
+
+La regla no distingue mayúsculas, minúsculas, tildes ni espacios. Por lo tanto,
+también excluye variantes como "Ajuste contable", "AJUSTE RM", "Coop marketing"
+o "COOPERATIVA".
+
+La exclusión se aplica antes de calcular:
+- inversión FY y YTD 2025;
+- evolución mensual 2025;
+- inversión por marca y categoría;
+- benchmarks y brechas;
+- oportunidad potencial, score y estado del Copiloto Comercial.
+
+La regla solo afecta datos 2025. Los registros 2026 no se excluyen por este criterio.
+
+Control técnico:
+Al abrir las herramientas del navegador (Consola), el mensaje
+"Control DESTINO DE FONDOS 2025" informa la cantidad de filas y el monto total
+excluido por Ajuste y Coop.
