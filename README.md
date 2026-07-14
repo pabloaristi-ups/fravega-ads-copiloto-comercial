@@ -39,3 +39,11 @@ Mejora de legibilidad del Copiloto Comercial: la tabla incorpora celdas tipo car
 - Se excluyen de las visualizaciones las gerencias `N/A` y `Sin categorizar`.
 - El filtro de Gerencia solo muestra gerencias accionables.
 - Los KPIs globales/mensuales permanecen completos para mantener consistencia con el total del Sheet.
+
+## V2.9 — Depuración de inversión 2025
+
+Para el año 2025 se excluyen de todos los cálculos los registros cuyo campo
+`DESTINO DE FONDOS` comience con `AJUSTE` o `COOP`. La regla se ejecuta al procesar
+la base de campañas y no afecta los datos 2026. La consola del navegador muestra
+un control de filas y monto excluidos.
+
