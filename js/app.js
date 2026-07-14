@@ -222,6 +222,7 @@
             const colMes = findCol(['MES'], ['MES']);
             const colFechaMes = findCol(['FECHA. MES', 'FECHA MES'], ['FECHA']);
             const colGerencia = findCol(['GERENCIA'], ['GERENCIA']);
+            const colDestinoFondos = findCol(['DESTINO DE FONDOS'], ['DESTINO DE FONDOS', 'DESTINO FONDOS']);
 
             // Determinar YTD dinámico
             let currentMonth = new Date().getMonth() + 1; // getMonth es 0-index
@@ -244,6 +245,7 @@
 
             // Recorrer el formato JSON de rows
             window.validRows = [];
+            const controlDestinoFondos2025 = { ajuste: 0, coop: 0, montoExcluido: 0, filasExcluidas: 0 };
             rows.forEach(r => {
                 const getVal = (idx) => (r.c[idx] && r.c[idx].v !== null) ? r.c[idx].v : '';
                 
@@ -267,6 +269,24 @@
                 if (!mes) mes = parseMonthValue(fechaMesVal);
 
                 let isYTD = (mes <= mes_maximo_ytd);
+
+                // Regla de depuración 2025:
+                // los registros cuyo DESTINO DE FONDOS sea Ajuste o Coop no representan
+                // inversión comercial y se excluyen de todos los cálculos de 2025.
+                // La comparación es tolerante a mayúsculas, acentos, espacios y variantes
+                // como "AJUSTE CONTABLE" o "COOP MARKETING".
+                const destinoFondos = normalizeText(getVal(colDestinoFondos));
+                const excluirPorDestino2025 = anio === 2025 && (
+                    destinoFondos.startsWith('AJUSTE') ||
+                    destinoFondos.startsWith('COOP')
+                );
+                if (excluirPorDestino2025) {
+                    controlDestinoFondos2025.filasExcluidas += 1;
+                    controlDestinoFondos2025.montoExcluido += inv;
+                    if (destinoFondos.startsWith('AJUSTE')) controlDestinoFondos2025.ajuste += 1;
+                    if (destinoFondos.startsWith('COOP')) controlDestinoFondos2025.coop += 1;
+                    return;
+                }
 
                 // Global KPI
                 if (anio === 2025) { inv_2025_fy += inv; if(isYTD) inv_2025_ytd += inv; }
@@ -339,7 +359,18 @@
                 return `<span class="neutral">0.0%</span>`;
             };
 
-            console.log('Fuentes usadas', {campanas: BASE_URL_CAMP, gmv: BASE_URL_GMV, filasCampanas: rows.length, filasGMV: rowsG ? rowsG.length : 0, colGerencia});
+            console.log('Fuentes usadas', {
+                campanas: BASE_URL_CAMP,
+                gmv: BASE_URL_GMV,
+                filasCampanas: rows.length,
+                filasGMV: rowsG ? rowsG.length : 0,
+                colGerencia,
+                colDestinoFondos
+            });
+            console.info('Control DESTINO DE FONDOS 2025', {
+                ...controlDestinoFondos2025,
+                montoExcluidoFormateado: formatMoney(controlDestinoFondos2025.montoExcluido)
+            });
             console.log('V2.8 - Visualizaciones excluyen gerencias no accionables', {excluidas: ['N/A', 'Sin categorizar']});
             $('#header-subtitle').text(`Conectado en vivo al Checklist. Datos hasta YTD ${rango_ytd_str}`);
             $('#kpi-inv-fy').text(formatMoney(inv_2026_fy));
