@@ -257,6 +257,39 @@
             const colGMVValue = findGMVCol(['VENTA NETA', 'GMV', 'VENTAS'], ['VENTA NETA', 'GMV']);
             const colGMVGerencia = findGMVCol(['GERENCIA'], ['GERENCIA']);
 
+            // Universo de categorías válidas de GMV. Se usa para resolver, fila por fila,
+            // cuál de las posibles columnas “Categoría” de Campañas es la correcta.
+            // Esto evita que una columna auxiliar homónima deje toda la inversión en $0
+            // en las vistas por categoría, aun cuando el total global sea correcto.
+            const gmvCategoryKeySet = new Set();
+            const gmvCategoryLabelByKey = {};
+            const gmvCategoryGerenciaByKey = {};
+            const chooseCategoryFromRow = (row, candidateCols, preferredCol, referenceSet = null) => {
+                const values = [];
+                candidateCols.forEach(idx => {
+                    const cell = row.c[idx];
+                    const raw = cell && cell.v !== null ? cell.v : '';
+                    const key = normalizeKey(raw);
+                    if (key) values.push({ raw, key, idx });
+                });
+                if (referenceSet) {
+                    const matched = values.find(v => referenceSet.has(v.key));
+                    if (matched) return matched;
+                }
+                const preferred = values.find(v => v.idx === preferredCol);
+                return preferred || values[0] || { raw: '', key: '', idx: -1 };
+            };
+
+            jsonGMV.table.rows.forEach(r => {
+                const chosen = chooseCategoryFromRow(r, candidateGMVCategoryCols, colGMVCat);
+                if (!chosen.key) return;
+                gmvCategoryKeySet.add(chosen.key);
+                gmvCategoryLabelByKey[chosen.key] = displayCategory(chosen.raw);
+                const gerCell = r.c[colGMVGerencia >= 0 ? colGMVGerencia : 6];
+                const ger = normalizeText(gerCell && gerCell.v !== null ? gerCell.v : '');
+                if (ger && !isExcludedGerencia(ger)) gmvCategoryGerenciaByKey[chosen.key] = ger;
+            });
+
             // Elige la pareja de columnas de categoría con mayor solapamiento real entre ambas bases.
             // Esto evita tomar por error una columna auxiliar que también se llame “Categoría”.
             const sampleKeys = (sourceRows, colIndex, maxRows = 600) => {
@@ -320,9 +353,10 @@
 
                 let marca = cleanMarca(getVal(colMarca));
                 if (marca.toUpperCase() === 'DESCONOCIDO' || marca === '0') return;
-                let categoriaRaw = getVal(colCat);
-                let categoria = displayCategory(categoriaRaw);
-                let categoriaKey = normalizeKey(categoriaRaw);
+                const categoriaElegida = chooseCategoryFromRow(r, candidateCampCategoryCols, colCat, gmvCategoryKeySet);
+                let categoriaRaw = categoriaElegida.raw || getVal(colCat);
+                let categoriaKey = categoriaElegida.key || normalizeKey(categoriaRaw);
+                let categoria = gmvCategoryLabelByKey[categoriaKey] || displayCategory(categoriaRaw);
                 let anio = parseYearValue(getVal(colAno));
                 let mes = parseMonthValue(getVal(colMes));
                 // Fallback: si MES/AÑO vienen vacíos o con formato no parseable, derivar desde Fecha.Mes (ej: 202606)
@@ -362,7 +396,9 @@
                 // Para visualizaciones por categoría/copiloto excluimos gerencias no accionables
                 // (N/A o Sin categorizar), pero mantenemos los KPIs globales y mensuales completos.
                 let grupo = 'SIN ASIGNAR';
-                let gerencia = normalizeText(getVal(colGerencia)) || 'SIN ASIGNAR';
+                // La gerencia de GMV es la referencia maestra para el análisis por categoría.
+                // Solo si no existe mapeo por categoría usamos la gerencia de Campañas.
+                let gerencia = gmvCategoryGerenciaByKey[categoriaKey] || normalizeText(getVal(colGerencia)) || 'SIN ASIGNAR';
                 if (isExcludedGerencia(gerencia)) return;
 
                 // Marcas
@@ -396,9 +432,10 @@
                 let mes = parseMonthValue(fechaMes);
                 let marca = cleanMarca(getVal(colGMVMarca >= 0 ? colGMVMarca : 1));
                 if (marca.toUpperCase() === 'DESCONOCIDO' || marca === '0') return;
-                let categoriaRaw = getVal(colGMVCat);
-                let categoria = displayCategory(categoriaRaw);
-                let categoriaKey = normalizeKey(categoriaRaw);
+                const categoriaElegidaGMV = chooseCategoryFromRow(r, candidateGMVCategoryCols, colGMVCat);
+                let categoriaRaw = categoriaElegidaGMV.raw || getVal(colGMVCat);
+                let categoriaKey = categoriaElegidaGMV.key || normalizeKey(categoriaRaw);
+                let categoria = gmvCategoryLabelByKey[categoriaKey] || displayCategory(categoriaRaw);
                 let gmv = cleanInv(getVal(colGMVValue >= 0 ? colGMVValue : 5));
                 if (gmv === 0) return;
                 
@@ -414,19 +451,23 @@
             const invYTDPorCategoria = window.validRows
                 .filter(r => r.anio === 2026 && r.isYTD)
                 .reduce((sum, r) => sum + r.inv, 0);
-            console.info('V3.3 · Control YTD y cruce de categorías', {
+            console.info('V3.4 · Control YTD y cruce de categorías', {
                 corte: rango_ytd_str,
                 inversionGlobalYTD: inv_2026_ytd,
                 inversionYTDDisponibleParaCategorias: invYTDPorCategoria,
                 diferencia: inv_2026_ytd - invYTDPorCategoria,
                 columnaCategoriaCampanas: colCat,
                 columnaCategoriaGMV: colGMVCat,
-                solapamientoCategorias: bestOverlap
+                solapamientoCategorias: bestOverlap,
+                categoriasGMVDetectadas: gmvCategoryKeySet.size
             });
 
-            // Procesar KPIs Globales
-            let var_fy = inv_2025_ytd > 0 ? ((inv_2026_ytd / inv_2025_ytd) - 1) * 100 : 0;
+            // KPIs del dashboard: una única ventana comparable YTD al último mes cerrado.
+            const gmv_2026_ytd_global = window.validRowsGMV
+                .filter(r => r.anio === 2026 && r.isYTD)
+                .reduce((sum, r) => sum + r.gmv, 0);
             let var_ytd = inv_2025_ytd > 0 ? ((inv_2026_ytd / inv_2025_ytd) - 1) * 100 : 0;
+            let as_ratio_ytd_global = gmv_2026_ytd_global > 0 ? inv_2026_ytd / gmv_2026_ytd_global : 0;
 
             const formatVarHtml = (val) => {
                 if (val > 0) return `<span class="positive">+${val.toFixed(1)}%</span>`;
@@ -449,12 +490,14 @@
                 ...controlDestinoFondos2025,
                 montoExcluidoFormateado: formatMoney(controlDestinoFondos2025.montoExcluido)
             });
-            console.log('V3.3 estable - Visualizaciones excluyen gerencias no accionables', {excluidas: ['N/A', 'Sin categorizar']});
-            $('#header-subtitle').text(`Conectado en vivo al Checklist. Datos hasta YTD ${rango_ytd_str}`);
+            console.log('V3.4 estable - Visualizaciones excluyen gerencias no accionables', {excluidas: ['N/A', 'Sin categorizar']});
+            $('#header-subtitle').text(`Conectado en vivo al Checklist. Datos YTD al último mes cerrado: ${rango_ytd_str}`);
+            $('#kpi-inv-fy').prev('.kpi-title').text(`Inversión RM YTD 2026 (${rango_ytd_str})`);
             $('#kpi-inv-fy').text(formatMoney(inv_2026_ytd));
-            $('#kpi-var-fy').html(formatVarHtml(var_fy));
-            $('#kpi-title-ytd').text(`Variación YTD (${rango_ytd_str})`);
-            $('#kpi-var-ytd').html(formatVarHtml(var_ytd));
+            $('#kpi-var-fy').prev('.kpi-title').text(`Variación interanual YTD (${rango_ytd_str})`);
+            $('#kpi-var-fy').html(formatVarHtml(var_ytd));
+            $('#kpi-title-ytd').text(`A/S Ratio YTD (${rango_ytd_str})`);
+            $('#kpi-var-ytd').text(formatPct(as_ratio_ytd_global));
 
             // Procesar Marcas (Tabla, Churn, Nuevas, Top 15, Pareto)
             let marcasArray = Object.keys(marcasMap).map(k => ({ nombre: k, ...marcasMap[k] }));
@@ -566,9 +609,9 @@
             if (Chart.getChart('yearChart')) Chart.getChart('yearChart').destroy();
             new Chart(document.getElementById('yearChart').getContext('2d'), {
                 type: 'line',
-                data: { labels: meses_yoy_labels, datasets: [
-                    { label: '2025', data: inv_mensual_2025, borderColor: '#94A3B8', borderDash: [5, 5], tension: 0.4 },
-                    { label: '2026', data: inv_mensual_2026, borderColor: '#818CF8', backgroundColor: 'rgba(129, 140, 248, 0.2)', fill: true, tension: 0.4 }
+                data: { labels: meses_yoy_labels.slice(0, mes_maximo_ytd), datasets: [
+                    { label: '2025', data: inv_mensual_2025.slice(0, mes_maximo_ytd), borderColor: '#94A3B8', borderDash: [5, 5], tension: 0.4 },
+                    { label: '2026', data: inv_mensual_2026.slice(0, mes_maximo_ytd), borderColor: '#818CF8', backgroundColor: 'rgba(129, 140, 248, 0.2)', fill: true, tension: 0.4 }
                 ] },
                 options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true, labels: { color: '#F8FAFC' } }, tooltip: { callbacks: { label: (ctx) => ctx.dataset.label + ': ' + formatMoney(ctx.parsed.y) } } }, scales: { x: { ticks: { color: tickColorCallbackX, font: { size: 11 } } }, y: { ticks: { callback: formatAxis } } } }
             });
