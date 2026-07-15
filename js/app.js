@@ -374,6 +374,15 @@
                 window.validRowsGMV.push({ marca: marca, marcaKey: normalizeKey(marca), anio: anio, categoria: categoria, categoriaKey: categoriaKey, gmv: gmv, isYTD: isYTD, grupo: grupo, gerencia: gerencia, gerenciaKey: normalizeKey(gerencia) });
             });
 
+            // Contexto YTD compartido entre todas las vistas.
+            // Evita que renderGMV dependa de variables locales de processData.
+            window.ytdContext = {
+                mesMaximoYTD: mes_maximo_ytd,
+                rangoYTD: rango_ytd_str,
+                inv2025YTD: inv_2025_ytd,
+                inv2026YTD: inv_2026_ytd
+            };
+
             // Procesar KPIs Globales
             let var_fy = inv_2025_fy > 0 ? ((inv_2026_fy / inv_2025_fy) - 1) * 100 : 0;
             let var_ytd = inv_2025_ytd > 0 ? ((inv_2026_ytd / inv_2025_ytd) - 1) * 100 : 0;
@@ -725,10 +734,10 @@
 
             const totalMasterInv = window.masterDatasetYTD.reduce((a,x)=>a+(x.inv||0),0);
             console.info('V3 · Control dataset maestro YTD', {
-                corteMes: mes_maximo_ytd,
-                inversionGlobalYTD: inv_2026_ytd,
+                corteMes: window.ytdContext?.mesMaximoYTD ?? null,
+                inversionGlobalYTD: window.ytdContext?.inv2026YTD ?? 0,
                 inversionDistribuidaCategorias: totalMasterInv,
-                diferencia: inv_2026_ytd - totalMasterInv,
+                diferencia: (window.ytdContext?.inv2026YTD ?? 0) - totalMasterInv,
                 categoriasConGMV: window.masterDatasetYTD.filter(x=>x.gmv>0).length,
                 categoriasConInversion: window.masterDatasetYTD.filter(x=>x.inv>0).length
             });
