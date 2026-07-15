@@ -301,7 +301,10 @@
                 // (N/A o Sin categorizar), pero mantenemos los KPIs globales y mensuales completos.
                 let grupo = 'SIN ASIGNAR';
                 let gerencia = normalizeText(getVal(colGerencia)) || 'SIN ASIGNAR';
-                if (isExcludedGerencia(gerencia)) return;
+                // No descartamos la fila de inversión en esta etapa aunque la gerencia
+                // venga vacía/N/A. El vínculo categoría -> gerencia se resuelve luego
+                // contra la base GMV, evitando perder inversión 2026 en las vistas
+                // por categoría y en el Copiloto Comercial.
 
                 // Marcas
                 if (!marcasMap[marca]) marcasMap[marca] = { y25:0, y26:0, y25_ytd:0, y26_ytd:0 };
@@ -661,24 +664,59 @@
                 }
             });
 
-            // Agregar Inversión (Solo YTD para Eficiencia). Se asigna por clave normalizada,
-            // con fallback al nombre visible, para evitar casos como espacios invisibles o signos.
+            // Lookup de gerencia por categoría construido desde GMV, que es la fuente
+            // común y estable para la clasificación comercial. Esto evita que una fila
+            // de CAMPAÑAS con gerencia vacía/N/A deje la inversión sin asociar.
+            const categoryGerenciaLookup = {};
+            Object.keys(localCategoriaASMap).forEach(bucketKey => {
+                const bucket = localCategoriaASMap[bucketKey];
+                const gerKey = Object.keys(bucket.gerencias || {})
+                    .filter(k => !isExcludedGerencia(k))
+                    .sort((a,b) => (bucket.gerencias[b] || 0) - (bucket.gerencias[a] || 0))[0];
+                if (gerKey) {
+                    categoryGerenciaLookup[bucket.normalizedKey || normalizeKey(bucket.nombre)] = {
+                        key: gerKey,
+                        nombre: (bucket.gerenciaLabels && bucket.gerenciaLabels[gerKey]) ||
+                                (localGerenciaASMap[gerKey] && localGerenciaASMap[gerKey].nombre) || gerKey
+                    };
+                }
+            });
+
+            // Agregar Inversión (Solo YTD para Eficiencia). La inversión se suma por
+            // categoría normalizada y la gerencia se toma primero de GMV. Así los totales
+            // de categoría/Copiloto permanecen alineados con el total 2026 global.
             window.validRows.forEach(r => {
                 if (r.anio === 2026 && r.isYTD) {
                     const catDisplay = displayCategory(r.categoria);
                     const catNorm = r.categoriaKey || normalizeKey(r.categoria);
-                    const gerKey = r.gerenciaKey || normalizeKey(r.gerencia);
                     const marcaKey = r.marcaKey || normalizeKey(r.marca);
+                    const mappedGerencia = categoryGerenciaLookup[catNorm];
+                    let gerenciaNombre = mappedGerencia ? mappedGerencia.nombre : r.gerencia;
+                    let gerKey = mappedGerencia ? mappedGerencia.key : (r.gerenciaKey || normalizeKey(r.gerencia));
+
+                    // Si no existe una gerencia accionable ni en GMV ni en Campañas,
+                    // no mostramos esa categoría, pero tampoco alteramos KPIs globales.
+                    if (isExcludedGerencia(gerenciaNombre) || isExcludedGerencia(gerKey)) return;
+
                     let key = marcaKey + '||' + catNorm;
                     if (gmvMarcaCatMap[key]) gmvMarcaCatMap[key].inv += r.inv;
-                    
-                    const catBucket = ensureCategoryBucket(catDisplay, catNorm, r.gerencia, gerKey);
+
+                    const catBucket = ensureCategoryBucket(catDisplay, catNorm, gerenciaNombre, gerKey);
                     catBucket.inv += r.inv;
                     catBucket.marcas[marcaKey] = true;
+                    catBucket.gerencias[gerKey] = (catBucket.gerencias[gerKey] || 0);
 
-                    if (!localGerenciaASMap[gerKey]) localGerenciaASMap[gerKey] = { nombre: r.gerencia || 'SIN ASIGNAR', gmv: 0, inv: 0 };
+                    if (!localGerenciaASMap[gerKey]) {
+                        localGerenciaASMap[gerKey] = { nombre: gerenciaNombre || 'SIN ASIGNAR', gmv: 0, inv: 0 };
+                    }
                     localGerenciaASMap[gerKey].inv += r.inv;
                 }
+            });
+
+            console.info('Control inversión 2026 por categoría', {
+                totalGlobalYTD: inv_2026_ytd,
+                totalCategoriasYTD: Object.values(localCategoriaASMap).reduce((acc, x) => acc + (x.inv || 0), 0),
+                filasInversion2026YTD: window.validRows.filter(r => r.anio === 2026 && r.isYTD).length
             });
 
             // Diagnóstico visible en consola para detectar categorías con inversión y sin GMV asociado.
