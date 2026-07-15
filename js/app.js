@@ -746,6 +746,11 @@
             if (window.copilotCategoryDiagnostics.length) console.warn('Categorías con inversión RM pero sin GMV asociado:', window.copilotCategoryDiagnostics);
 
             const localCategoriaKeyIndex = Object.fromEntries(Object.keys(localCategoriaASMap).map(k => [k,k]));
+
+            // Array maestro marca + categoría usado por la tabla y el gráfico de GMV.
+            // Debe declararse dentro de renderGMV para que esté disponible en todo este bloque.
+            const marcasArray = Object.values(gmvMarcaCatMap);
+
             // Render GMV Table
             let gmv_table_html = '';
             marcasArray.forEach(m => {
