@@ -280,16 +280,6 @@
                 return preferred || values[0] || { raw: '', key: '', idx: -1 };
             };
 
-            jsonGMV.table.rows.forEach(r => {
-                const chosen = chooseCategoryFromRow(r, candidateGMVCategoryCols, colGMVCat);
-                if (!chosen.key) return;
-                gmvCategoryKeySet.add(chosen.key);
-                gmvCategoryLabelByKey[chosen.key] = displayCategory(chosen.raw);
-                const gerCell = r.c[colGMVGerencia >= 0 ? colGMVGerencia : 6];
-                const ger = normalizeText(gerCell && gerCell.v !== null ? gerCell.v : '');
-                if (ger && !isExcludedGerencia(ger)) gmvCategoryGerenciaByKey[chosen.key] = ger;
-            });
-
             // Elige la pareja de columnas de categoría con mayor solapamiento real entre ambas bases.
             // Esto evita tomar por error una columna auxiliar que también se llame “Categoría”.
             const sampleKeys = (sourceRows, colIndex, maxRows = 600) => {
@@ -317,6 +307,19 @@
                         colGMVCat = gmvIdx;
                     }
                 });
+            });
+
+
+            // Recién después de definir colGMVCat construimos el universo maestro de categorías.
+            // Antes este bloque se ejecutaba antes de inicializar colGMVCat y detenía toda la app.
+            jsonGMV.table.rows.forEach(r => {
+                const chosen = chooseCategoryFromRow(r, candidateGMVCategoryCols, colGMVCat);
+                if (!chosen.key) return;
+                gmvCategoryKeySet.add(chosen.key);
+                gmvCategoryLabelByKey[chosen.key] = displayCategory(chosen.raw);
+                const gerCell = r.c[colGMVGerencia >= 0 ? colGMVGerencia : 6];
+                const ger = normalizeText(gerCell && gerCell.v !== null ? gerCell.v : '');
+                if (ger && !isExcludedGerencia(ger)) gmvCategoryGerenciaByKey[chosen.key] = ger;
             });
 
             // Determinar YTD dinámico
