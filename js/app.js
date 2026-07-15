@@ -1,8 +1,8 @@
 
         // Endpoint base de Google Sheets (mismo Sheet compartido, lectura en vivo vía GViz/JSONP)
         const SOURCE_SHEET_ID = '1tfz10mJDhwg9pPauk-RhWOnL9jFm-aeYi39qmjDKluQ';
-        const BASE_URL_CAMP = `https://docs.google.com/spreadsheets/d/${SOURCE_SHEET_ID}/gviz/tq?gid=1808937830`;
-        const BASE_URL_GMV  = `https://docs.google.com/spreadsheets/d/${SOURCE_SHEET_ID}/gviz/tq?gid=1144863220`;
+        const BASE_URL_CAMP = `https://docs.google.com/spreadsheets/d/${SOURCE_SHEET_ID}/gviz/tq?gid=1808937830&headers=2`;
+        const BASE_URL_GMV  = `https://docs.google.com/spreadsheets/d/${SOURCE_SHEET_ID}/gviz/tq?gid=1144863220&headers=1`;
 
         // Ya no se usa mapeo externo de categorías: GERENCIA viene en ambas bases.
 
@@ -236,6 +236,7 @@
             const colMes = findCol(['MES'], ['MES']);
             const colFechaMes = findCol(['FECHA. MES', 'FECHA MES'], ['FECHA']);
             const colGerencia = findCol(['GERENCIA'], ['GERENCIA']);
+            const colIdCategoria = findCol(['ID CATEGORIA', 'ID CAT.', 'ID CAT'], ['ID CATEGORIA', 'ID CAT']);
             const colDestinoFondos = findCol(['DESTINO DE FONDOS'], ['DESTINO DE FONDOS', 'DESTINO FONDOS']);
 
             // Selección robusta de columnas GMV por encabezado, evitando depender de posiciones fijas.
@@ -256,6 +257,7 @@
                 .map(x => x.index);
             const colGMVValue = findGMVCol(['VENTA NETA', 'GMV', 'VENTAS'], ['VENTA NETA', 'GMV']);
             const colGMVGerencia = findGMVCol(['GERENCIA'], ['GERENCIA']);
+            const colGMVIdCategoria = findGMVCol(['ID CAT.', 'ID CATEGORIA', 'ID CAT'], ['ID CAT', 'ID CATEGORIA']);
 
             // Elige la pareja de columnas de categoría con mayor solapamiento real entre ambas bases.
             // Esto evita tomar por error una columna auxiliar que también se llame “Categoría”.
@@ -287,34 +289,46 @@
             });
 
             // Catálogo canónico de categorías y gerencias desde GMV.
-            // GMV es la fuente maestra para la taxonomía usada en Análisis y Copiloto.
-            const canonicalCategoryByKey = {};
-            const canonicalGerenciaByCategoryKey = {};
+            // Se cruza por ID de categoría como clave primaria; el texto queda como fallback.
+            const canonicalCategoryByJoinKey = {};
+            const canonicalGerenciaByJoinKey = {};
+            const canonicalJoinKeyByNameKey = {};
+            const makeCategoryJoinKey = (idValue, nameValue) => {
+                const idNum = Number(idValue);
+                if (Number.isFinite(idNum) && idNum > 0) return 'ID:' + String(Math.trunc(idNum));
+                const idText = String(idValue || '').trim();
+                if (idText && idText !== '0') return 'ID:' + normalizeKey(idText);
+                const nameKey = normalizeKey(nameValue);
+                return nameKey ? 'NAME:' + nameKey : '';
+            };
+
             jsonGMV.table.rows.forEach(r => {
                 const getVal = (idx) => (idx >= 0 && r.c[idx] && r.c[idx].v !== null) ? r.c[idx].v : '';
                 const rawCategory = getVal(colGMVCat);
-                const key = normalizeKey(rawCategory);
-                if (!key) return;
-                if (!canonicalCategoryByKey[key]) canonicalCategoryByKey[key] = displayCategory(rawCategory);
+                const rawId = getVal(colGMVIdCategoria);
+                const joinKey = makeCategoryJoinKey(rawId, rawCategory);
+                const nameKey = normalizeKey(rawCategory);
+                if (!joinKey) return;
+                if (!canonicalCategoryByJoinKey[joinKey]) canonicalCategoryByJoinKey[joinKey] = displayCategory(rawCategory);
+                if (nameKey && !canonicalJoinKeyByNameKey[nameKey]) canonicalJoinKeyByNameKey[nameKey] = joinKey;
                 const ger = normalizeText(getVal(colGMVGerencia >= 0 ? colGMVGerencia : 6));
-                if (ger && !isExcludedGerencia(ger)) canonicalGerenciaByCategoryKey[key] = ger;
+                if (ger && !isExcludedGerencia(ger)) canonicalGerenciaByJoinKey[joinKey] = ger;
             });
-            const canonicalCategoryKeys = new Set(Object.keys(canonicalCategoryByKey));
 
-            // Resuelve la categoría de cada fila de Campañas probando todas las columnas candidatas.
-            // Prioriza coincidencia exacta con el catálogo GMV y evita depender de una única columna global.
             const resolveCampaignCategory = (row) => {
-                const candidates = candidateCampCategoryCols.length ? candidateCampCategoryCols : [colCat];
-                for (const idx of candidates) {
-                    const raw = (idx >= 0 && row.c[idx] && row.c[idx].v !== null) ? row.c[idx].v : '';
-                    const key = normalizeKey(raw);
-                    if (key && canonicalCategoryKeys.has(key)) {
-                        return { raw, key, display: canonicalCategoryByKey[key] };
-                    }
+                const getRowVal = (idx) => (idx >= 0 && row.c[idx] && row.c[idx].v !== null) ? row.c[idx].v : '';
+                const rawId = getRowVal(colIdCategoria);
+                let rawName = '';
+                for (const idx of (candidateCampCategoryCols.length ? candidateCampCategoryCols : [colCat])) {
+                    const candidate = getRowVal(idx);
+                    if (normalizeKey(candidate)) { rawName = candidate; break; }
                 }
-                const fallbackRaw = (colCat >= 0 && row.c[colCat] && row.c[colCat].v !== null) ? row.c[colCat].v : '';
-                const fallbackKey = normalizeKey(fallbackRaw);
-                return { raw: fallbackRaw, key: fallbackKey, display: displayCategory(fallbackRaw) };
+                let joinKey = makeCategoryJoinKey(rawId, rawName);
+                const nameKey = normalizeKey(rawName);
+                if ((!joinKey || !canonicalCategoryByJoinKey[joinKey]) && nameKey && canonicalJoinKeyByNameKey[nameKey]) {
+                    joinKey = canonicalJoinKeyByNameKey[nameKey];
+                }
+                return { raw: rawName, id: rawId, key: joinKey, display: canonicalCategoryByJoinKey[joinKey] || displayCategory(rawName) };
             };
 
             // Determinar YTD dinámico
@@ -397,7 +411,7 @@
                 // Para distribuir inversión por categoría no descartamos filas porque la gerencia
                 // de Campañas sea N/A/Sin categorizar. La gerencia canónica se hereda desde GMV.
                 let gerenciaCamp = normalizeText(getVal(colGerencia));
-                let gerencia = canonicalGerenciaByCategoryKey[categoriaKey] || gerenciaCamp || 'SIN ASIGNAR';
+                let gerencia = canonicalGerenciaByJoinKey[categoriaKey] || gerenciaCamp || 'SIN ASIGNAR';
                 if (isExcludedGerencia(gerencia)) gerencia = 'SIN ASIGNAR';
 
                 // Marcas
@@ -432,8 +446,9 @@
                 let marca = cleanMarca(getVal(colGMVMarca >= 0 ? colGMVMarca : 1));
                 if (marca.toUpperCase() === 'DESCONOCIDO' || marca === '0') return;
                 let categoriaRaw = getVal(colGMVCat);
-                let categoria = displayCategory(categoriaRaw);
-                let categoriaKey = normalizeKey(categoriaRaw);
+                let categoriaIdRaw = getVal(colGMVIdCategoria);
+                let categoriaKey = makeCategoryJoinKey(categoriaIdRaw, categoriaRaw);
+                let categoria = canonicalCategoryByJoinKey[categoriaKey] || displayCategory(categoriaRaw);
                 let gmv = cleanInv(getVal(colGMVValue >= 0 ? colGMVValue : 5));
                 if (gmv === 0) return;
                 
@@ -449,14 +464,15 @@
             const invYTDPorCategoria = window.validRows
                 .filter(r => r.anio === 2026 && r.isYTD)
                 .reduce((sum, r) => sum + r.inv, 0);
-            console.info('V3.3 · Control YTD y cruce de categorías', {
+            console.info('V3.9 · Control YTD y cruce por ID de categoría', {
                 corte: rango_ytd_str,
                 inversionGlobalYTD: inv_2026_ytd,
                 inversionYTDDisponibleParaCategorias: invYTDPorCategoria,
                 diferencia: inv_2026_ytd - invYTDPorCategoria,
                 columnaCategoriaCampanas: colCat,
+                columnaIdCategoriaCampanas: colIdCategoria,
                 columnaCategoriaGMV: colGMVCat,
-                solapamientoCategorias: bestOverlap,
+                columnaIdCategoriaGMV: colGMVIdCategoria,
                 categoriasCanonicasGMV: canonicalCategoryKeys.size,
                 filasInversion2026YTD: window.validRows.filter(r => r.anio === 2026 && r.isYTD).length,
                 categoriasConInversion2026YTD: new Set(window.validRows.filter(r => r.anio === 2026 && r.isYTD).map(r => r.categoriaKey)).size
@@ -480,8 +496,9 @@
                 colGerencia,
                 colDestinoFondos,
                 colCategoriaCampanas: colCat,
+                colIdCategoriaCampanas: colIdCategoria,
                 colCategoriaGMV: colGMVCat,
-                solapamientoCategorias: bestOverlap
+                colIdCategoriaGMV: colGMVIdCategoria
             });
             console.info('Control DESTINO DE FONDOS 2025', {
                 ...controlDestinoFondos2025,
