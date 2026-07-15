@@ -214,15 +214,37 @@
                 if (idx >= 0) return idx;
                 return colsNorm.findIndex(c => includesNorm.some(label => c.includes(label)));
             };
-            const colEstado = findCol(['ESTADO'], ['ESTADO']);
-            const colInv = findCol(['TOTAL INVERSIÓN ARS  (S/ IVA)', 'TOTAL INVERSIÓN ARS (S/ IVA)', 'TOTAL INVERSION ARS (S/ IVA)'], ['TOTAL INVERSION ARS']);
-            const colMarca = findCol(['MARCAS'], ['MARCAS']);
-            const colCat = findCol(['CATEGORÍA', 'CATEGORIA'], ['CATEGORIA']);
-            const colAno = findCol(['AÑO', 'ANO'], ['AÑO', 'ANO']);
-            const colMes = findCol(['MES'], ['MES']);
-            const colFechaMes = findCol(['FECHA. MES', 'FECHA MES'], ['FECHA']);
-            const colGerencia = findCol(['GERENCIA'], ['GERENCIA']);
-            const colDestinoFondos = findCol(['DESTINO DE FONDOS'], ['DESTINO DE FONDOS', 'DESTINO FONDOS']);
+            // Cuando hay encabezados duplicados o muy parecidos, GViz puede devolver varias
+            // columnas candidatas. Elegimos la que realmente contiene más datos válidos.
+            const findBestCol = (exactLabels, includesLabels = []) => {
+                const exactNorm = exactLabels.map(normalizeText);
+                const includesNorm = includesLabels.map(normalizeText);
+                const candidates = colsNorm.map((label, idx) => ({label, idx})).filter(x =>
+                    exactNorm.includes(x.label) || includesNorm.some(k => x.label.includes(k))
+                );
+                if (!candidates.length) return -1;
+                let best = candidates[0].idx, bestCount = -1;
+                candidates.forEach(c => {
+                    let count = 0;
+                    rows.forEach(r => {
+                        const cell = r.c && r.c[c.idx];
+                        const value = cell && cell.v !== null && cell.v !== undefined ? String(cell.v).trim() : '';
+                        if (value !== '' && value !== '0') count++;
+                    });
+                    if (count > bestCount) { bestCount = count; best = c.idx; }
+                });
+                return best;
+            };
+
+            const colEstado = findBestCol(['ESTADO'], ['ESTADO']);
+            const colInv = findBestCol(['TOTAL INVERSIÓN ARS  (S/ IVA)', 'TOTAL INVERSIÓN ARS (S/ IVA)', 'TOTAL INVERSION ARS (S/ IVA)'], ['TOTAL INVERSION ARS']);
+            const colMarca = findBestCol(['MARCAS', 'MARCA'], ['MARCAS', 'MARCA']);
+            const colCat = findBestCol(['CATEGORÍA', 'CATEGORIA'], ['CATEGORIA']);
+            const colAno = findBestCol(['AÑO', 'ANO'], ['AÑO', 'ANO']);
+            const colMes = findBestCol(['MES'], ['MES']);
+            const colFechaMes = findBestCol(['FECHA. MES', 'FECHA MES'], ['FECHA']);
+            const colGerencia = findBestCol(['GERENCIA'], ['GERENCIA']);
+            const colDestinoFondos = findBestCol(['DESTINO DE FONDOS'], ['DESTINO DE FONDOS', 'DESTINO FONDOS']);
 
             // Determinar YTD dinámico
             let currentMonth = new Date().getMonth() + 1; // getMonth es 0-index
@@ -374,10 +396,10 @@
                 ...controlDestinoFondos2025,
                 montoExcluidoFormateado: formatMoney(controlDestinoFondos2025.montoExcluido)
             });
-            console.log('V2.8 - Visualizaciones excluyen gerencias no accionables', {excluidas: ['N/A', 'Sin categorizar']});
+            console.log('V3 - Dataset maestro YTD y visualizaciones excluyen gerencias no accionables', {excluidas: ['N/A', 'Sin categorizar']});
             $('#header-subtitle').text(`Conectado en vivo al Checklist. Datos hasta YTD ${rango_ytd_str}`);
-            $('#kpi-inv-fy').text(formatMoney(inv_2026_fy));
-            $('#kpi-var-fy').html(formatVarHtml(var_fy));
+            $('#kpi-inv-fy').text(formatMoney(inv_2026_ytd));
+            $('#kpi-var-fy').html(formatVarHtml(var_ytd));
             $('#kpi-title-ytd').text(`Variación YTD (${rango_ytd_str})`);
             $('#kpi-var-ytd').html(formatVarHtml(var_ytd));
 
@@ -385,16 +407,16 @@
             let marcasArray = Object.keys(marcasMap).map(k => ({ nombre: k, ...marcasMap[k] }));
             
             // Pareto
-            marcasArray.sort((a,b) => b.y26 - a.y26);
+            marcasArray.sort((a,b) => b.y26_ytd - a.y26_ytd);
             let top_5_pareto = marcasArray.slice(0, 5);
-            let top_5_sum = top_5_pareto.reduce((sum, m) => sum + m.y26, 0);
-            let pareto_pct = inv_2026_fy > 0 ? (top_5_sum / inv_2026_fy * 100) : 0;
-            $('#pareto-text').text(`El Top 5 representa el ${pareto_pct.toFixed(1)}% de la inversión FY26`);
+            let top_5_sum = top_5_pareto.reduce((sum, m) => sum + m.y26_ytd, 0);
+            let pareto_pct = inv_2026_ytd > 0 ? (top_5_sum / inv_2026_ytd * 100) : 0;
+            $('#pareto-text').text(`El Top 5 representa el ${pareto_pct.toFixed(1)}% de la inversión YTD26`);
 
             let pareto_labels = top_5_pareto.map(m => m.nombre);
             pareto_labels.push('Resto de Marcas');
-            let pareto_data = top_5_pareto.map(m => m.y26);
-            pareto_data.push(inv_2026_fy - top_5_sum);
+            let pareto_data = top_5_pareto.map(m => m.y26_ytd);
+            pareto_data.push(inv_2026_ytd - top_5_sum);
 
             // Churn & Nuevas
             let churn_brands = [];
@@ -491,9 +513,9 @@
             if (Chart.getChart('yearChart')) Chart.getChart('yearChart').destroy();
             new Chart(document.getElementById('yearChart').getContext('2d'), {
                 type: 'line',
-                data: { labels: meses_yoy_labels, datasets: [
-                    { label: '2025', data: inv_mensual_2025, borderColor: '#94A3B8', borderDash: [5, 5], tension: 0.4 },
-                    { label: '2026', data: inv_mensual_2026, borderColor: '#818CF8', backgroundColor: 'rgba(129, 140, 248, 0.2)', fill: true, tension: 0.4 }
+                data: { labels: meses_yoy_labels.slice(0, mes_maximo_ytd), datasets: [
+                    { label: '2025 YTD', data: inv_mensual_2025.slice(0, mes_maximo_ytd), borderColor: '#94A3B8', borderDash: [5, 5], tension: 0.4 },
+                    { label: '2026 YTD', data: inv_mensual_2026.slice(0, mes_maximo_ytd), borderColor: '#818CF8', backgroundColor: 'rgba(129, 140, 248, 0.2)', fill: true, tension: 0.4 }
                 ] },
                 options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true, labels: { color: '#F8FAFC' } }, tooltip: { callbacks: { label: (ctx) => ctx.dataset.label + ': ' + formatMoney(ctx.parsed.y) } } }, scales: { x: { ticks: { color: tickColorCallbackX, font: { size: 11 } } }, y: { ticks: { callback: formatAxis } } } }
             });
@@ -501,7 +523,7 @@
             if (Chart.getChart('paretoChart')) Chart.getChart('paretoChart').destroy();
             new Chart(document.getElementById('paretoChart').getContext('2d'), {
                 type: 'doughnut',
-                data: { labels: top_5_pareto.map(m => m.nombre).concat(['Resto']), datasets: [{ data: top_5_pareto.map(m => m.y26).concat([inv_2026_fy - top_5_sum]), backgroundColor: ['#818CF8', '#C084FC', '#F472B6', '#34D399', '#FBBF24', '#475569'] }] },
+                data: { labels: top_5_pareto.map(m => m.nombre).concat(['Resto']), datasets: [{ data: top_5_pareto.map(m => m.y26_ytd).concat([inv_2026_ytd - top_5_sum]), backgroundColor: ['#818CF8', '#C084FC', '#F472B6', '#34D399', '#FBBF24', '#475569'] }] },
                 options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: '#94A3B8', padding: 20 } }, tooltip: { callbacks: { label: (ctx) => ' ' + formatMoney(ctx.parsed) } } }, cutout: '65%' }
             });
 
@@ -623,110 +645,98 @@
                 $('#gmv-warning').hide();
             }
 
+            // V3: DATASET MAESTRO YTD. Se construye una sola vez y alimenta las tres solapas.
+            // Corte: enero hasta el último mes cerrado (mes anterior al actual).
             let gmvMarcaCatMap = {};
             let localCategoriaASMap = {};
-            let localCategoriaKeyIndex = {};
             let localGerenciaASMap = {};
-
-            const ensureCategoryBucket = (displayName, normalizedKey, gerencia, gerenciaKey) => {
-                const display = displayCategory(displayName);
-                const norm = normalizedKey || normalizeKey(displayName);
-                let bucketKey = localCategoriaKeyIndex[norm] || display;
-                if (!localCategoriaASMap[bucketKey]) {
-                    localCategoriaASMap[bucketKey] = { nombre: display, key: bucketKey, normalizedKey: norm, gmv: 0, inv: 0, gerencias: {}, gerenciaLabels: {}, marcas: {} };
-                    localCategoriaKeyIndex[norm] = bucketKey;
-                }
-                if (gerencia) {
-                    const gKey = gerenciaKey || normalizeKey(gerencia);
-                    localCategoriaASMap[bucketKey].gerenciaLabels[gKey] = gerencia;
-                }
-                return localCategoriaASMap[bucketKey];
-            };
-
-            // Agregar GMV (Solo YTD para Eficiencia). La categoría visible conserva el texto original.
-            window.validRowsGMV.forEach(r => {
-                if (r.anio === 2026 && r.isYTD) {
-                    const catDisplay = displayCategory(r.categoria);
-                    const catNorm = r.categoriaKey || normalizeKey(r.categoria);
-                    const gerKey = r.gerenciaKey || normalizeKey(r.gerencia);
-                    const marcaKey = r.marcaKey || normalizeKey(r.marca);
-                    let key = marcaKey + '||' + catNorm;
-                    if (!gmvMarcaCatMap[key]) gmvMarcaCatMap[key] = { marca: r.marca, marcaKey: marcaKey, categoria: catDisplay, categoriaKey: catNorm, grupo: r.grupo, gerencia: r.gerencia, gerenciaKey: gerKey, gmv: 0, inv: 0 };
-                    gmvMarcaCatMap[key].gmv += r.gmv;
-                    
-                    const catBucket = ensureCategoryBucket(catDisplay, catNorm, r.gerencia, gerKey);
-                    catBucket.gmv += r.gmv;
-                    catBucket.gerencias[gerKey] = (catBucket.gerencias[gerKey] || 0) + r.gmv;
-                    catBucket.marcas[marcaKey] = true;
-
-                    if (!localGerenciaASMap[gerKey]) localGerenciaASMap[gerKey] = { nombre: r.gerencia, gmv: 0, inv: 0 };
-                    localGerenciaASMap[gerKey].gmv += r.gmv;
-                }
-            });
-
-            // Lookup de gerencia por categoría construido desde GMV, que es la fuente
-            // común y estable para la clasificación comercial. Esto evita que una fila
-            // de CAMPAÑAS con gerencia vacía/N/A deje la inversión sin asociar.
+            const categoryKeyToDisplay = {};
             const categoryGerenciaLookup = {};
-            Object.keys(localCategoriaASMap).forEach(bucketKey => {
-                const bucket = localCategoriaASMap[bucketKey];
-                const gerKey = Object.keys(bucket.gerencias || {})
-                    .filter(k => !isExcludedGerencia(k))
-                    .sort((a,b) => (bucket.gerencias[b] || 0) - (bucket.gerencias[a] || 0))[0];
-                if (gerKey) {
-                    categoryGerenciaLookup[bucket.normalizedKey || normalizeKey(bucket.nombre)] = {
-                        key: gerKey,
-                        nombre: (bucket.gerenciaLabels && bucket.gerenciaLabels[gerKey]) ||
-                                (localGerenciaASMap[gerKey] && localGerenciaASMap[gerKey].nombre) || gerKey
+
+            const ensureCategory = (catKey, displayName) => {
+                if (!localCategoriaASMap[catKey]) {
+                    localCategoriaASMap[catKey] = {
+                        nombre: displayCategory(displayName || catKey), key: catKey,
+                        normalizedKey: catKey, gmv: 0, inv: 0,
+                        gerencias: {}, gerenciaLabels: {}, marcas: {}
                     };
                 }
+                return localCategoriaASMap[catKey];
+            };
+
+            // 1) Base GMV: define catálogo de categorías y gerencia de referencia.
+            window.validRowsGMV.forEach(r => {
+                if (r.anio !== 2026 || !r.isYTD) return;
+                const catKey = r.categoriaKey || normalizeKey(r.categoria);
+                if (!catKey) return;
+                const gerKey = r.gerenciaKey || normalizeKey(r.gerencia);
+                if (isExcludedGerencia(r.gerencia) || !gerKey) return;
+                const marcaKey = r.marcaKey || normalizeKey(r.marca);
+                categoryKeyToDisplay[catKey] = displayCategory(r.categoria);
+                const cat = ensureCategory(catKey, r.categoria);
+                cat.gmv += r.gmv;
+                cat.gerencias[gerKey] = (cat.gerencias[gerKey] || 0) + r.gmv;
+                cat.gerenciaLabels[gerKey] = r.gerencia;
+                cat.marcas[marcaKey] = true;
+
+                if (!categoryGerenciaLookup[catKey] || r.gmv > categoryGerenciaLookup[catKey].gmv) {
+                    categoryGerenciaLookup[catKey] = { key: gerKey, nombre: r.gerencia, gmv: r.gmv };
+                }
+                if (!localGerenciaASMap[gerKey]) localGerenciaASMap[gerKey] = { nombre: r.gerencia, gmv: 0, inv: 0 };
+                localGerenciaASMap[gerKey].gmv += r.gmv;
+
+                const mk = marcaKey + '||' + catKey;
+                if (!gmvMarcaCatMap[mk]) gmvMarcaCatMap[mk] = { marca:r.marca, marcaKey, categoria:cat.nombre, categoriaKey:catKey, gerencia:r.gerencia, gerenciaKey:gerKey, gmv:0, inv:0 };
+                gmvMarcaCatMap[mk].gmv += r.gmv;
             });
 
-            // Agregar Inversión (Solo YTD para Eficiencia). La inversión se suma por
-            // categoría normalizada y la gerencia se toma primero de GMV. Así los totales
-            // de categoría/Copiloto permanecen alineados con el total 2026 global.
+            // 2) Base inversión: agrega 2026 YTD al mismo catálogo maestro por categoría normalizada.
+            // Si una categoría sólo existe en inversión, se conserva para diagnóstico, pero se muestra
+            // únicamente cuando puede asociarse a una gerencia accionable.
             window.validRows.forEach(r => {
-                if (r.anio === 2026 && r.isYTD) {
-                    const catDisplay = displayCategory(r.categoria);
-                    const catNorm = r.categoriaKey || normalizeKey(r.categoria);
-                    const marcaKey = r.marcaKey || normalizeKey(r.marca);
-                    const mappedGerencia = categoryGerenciaLookup[catNorm];
-                    let gerenciaNombre = mappedGerencia ? mappedGerencia.nombre : r.gerencia;
-                    let gerKey = mappedGerencia ? mappedGerencia.key : (r.gerenciaKey || normalizeKey(r.gerencia));
+                if (r.anio !== 2026 || !r.isYTD) return;
+                const catKey = r.categoriaKey || normalizeKey(r.categoria);
+                if (!catKey) return;
+                const mapped = categoryGerenciaLookup[catKey];
+                const gerencia = mapped ? mapped.nombre : r.gerencia;
+                const gerKey = mapped ? mapped.key : (r.gerenciaKey || normalizeKey(r.gerencia));
+                const marcaKey = r.marcaKey || normalizeKey(r.marca);
 
-                    // Si no existe una gerencia accionable ni en GMV ni en Campañas,
-                    // no mostramos esa categoría, pero tampoco alteramos KPIs globales.
-                    if (isExcludedGerencia(gerenciaNombre) || isExcludedGerencia(gerKey)) return;
-
-                    let key = marcaKey + '||' + catNorm;
-                    if (gmvMarcaCatMap[key]) gmvMarcaCatMap[key].inv += r.inv;
-
-                    const catBucket = ensureCategoryBucket(catDisplay, catNorm, gerenciaNombre, gerKey);
-                    catBucket.inv += r.inv;
-                    catBucket.marcas[marcaKey] = true;
-                    catBucket.gerencias[gerKey] = (catBucket.gerencias[gerKey] || 0);
-
-                    if (!localGerenciaASMap[gerKey]) {
-                        localGerenciaASMap[gerKey] = { nombre: gerenciaNombre || 'SIN ASIGNAR', gmv: 0, inv: 0 };
-                    }
+                const cat = ensureCategory(catKey, categoryKeyToDisplay[catKey] || r.categoria);
+                cat.inv += r.inv;
+                cat.marcas[marcaKey] = true;
+                if (gerKey && !isExcludedGerencia(gerencia)) {
+                    cat.gerencias[gerKey] = cat.gerencias[gerKey] || 0;
+                    cat.gerenciaLabels[gerKey] = gerencia;
+                    if (!localGerenciaASMap[gerKey]) localGerenciaASMap[gerKey] = { nombre: gerencia, gmv: 0, inv: 0 };
                     localGerenciaASMap[gerKey].inv += r.inv;
                 }
+
+                const mk = marcaKey + '||' + catKey;
+                if (!gmvMarcaCatMap[mk]) gmvMarcaCatMap[mk] = { marca:r.marca, marcaKey, categoria:cat.nombre, categoriaKey:catKey, gerencia, gerenciaKey:gerKey, gmv:0, inv:0 };
+                gmvMarcaCatMap[mk].inv += r.inv;
             });
 
-            console.info('Control inversión 2026 por categoría', {
-                totalGlobalYTD: inv_2026_ytd,
-                totalCategoriasYTD: Object.values(localCategoriaASMap).reduce((acc, x) => acc + (x.inv || 0), 0),
-                filasInversion2026YTD: window.validRows.filter(r => r.anio === 2026 && r.isYTD).length
+            window.masterDatasetYTD = Object.values(localCategoriaASMap).map(cat => {
+                const gerKey = Object.keys(cat.gerencias || {}).sort((a,b) => (cat.gerencias[b]||0)-(cat.gerencias[a]||0))[0] || '';
+                const gerencia = cat.gerenciaLabels[gerKey] || (localGerenciaASMap[gerKey] && localGerenciaASMap[gerKey].nombre) || '';
+                return { ...cat, gerenciaKey:gerKey, gerencia };
             });
 
-            // Diagnóstico visible en consola para detectar categorías con inversión y sin GMV asociado.
-            window.copilotCategoryDiagnostics = Object.keys(localCategoriaASMap).map(k => localCategoriaASMap[k])
-                .filter(x => x.inv > 0 && x.gmv === 0)
-                .map(x => ({ categoria: x.nombre, inversion: x.inv, normalizedKey: x.normalizedKey }));
+            const totalMasterInv = window.masterDatasetYTD.reduce((a,x)=>a+(x.inv||0),0);
+            console.info('V3 · Control dataset maestro YTD', {
+                corteMes: mes_maximo_ytd,
+                inversionGlobalYTD: inv_2026_ytd,
+                inversionDistribuidaCategorias: totalMasterInv,
+                diferencia: inv_2026_ytd - totalMasterInv,
+                categoriasConGMV: window.masterDatasetYTD.filter(x=>x.gmv>0).length,
+                categoriasConInversion: window.masterDatasetYTD.filter(x=>x.inv>0).length
+            });
+            window.copilotCategoryDiagnostics = window.masterDatasetYTD.filter(x => x.inv > 0 && x.gmv === 0)
+                .map(x => ({ categoria:x.nombre, inversion:x.inv, normalizedKey:x.normalizedKey }));
             if (window.copilotCategoryDiagnostics.length) console.warn('Categorías con inversión RM pero sin GMV asociado:', window.copilotCategoryDiagnostics);
 
-            let marcasArray = Object.keys(gmvMarcaCatMap).map(k => ({ ...gmvMarcaCatMap[k] }));
-            
+            const localCategoriaKeyIndex = Object.fromEntries(Object.keys(localCategoriaASMap).map(k => [k,k]));
             // Render GMV Table
             let gmv_table_html = '';
             marcasArray.forEach(m => {
@@ -825,7 +835,7 @@
                             tension: 0.3
                         },
                         {
-                            label: 'GMV (FY26)',
+                            label: 'GMV (YTD26)',
                             data: top10GMV.map(m => m.gmv),
                             backgroundColor: '#818CF8',
                             borderRadius: 4,
