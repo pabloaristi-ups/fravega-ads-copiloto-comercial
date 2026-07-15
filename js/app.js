@@ -236,7 +236,7 @@
             const colMes = findCol(['MES'], ['MES']);
             const colFechaMes = findCol(['FECHA. MES', 'FECHA MES'], ['FECHA']);
             const colGerencia = findCol(['GERENCIA'], ['GERENCIA']);
-            const colIdCategoria = findCol(['ID CATEGORIA', 'ID CAT.', 'ID CAT'], ['ID CATEGORIA', 'ID CAT']);
+            const colIdCategoria = findCol(['ID CATEGORIA', 'ID CATEGORÍA'], ['ID CATEGORIA']);
             const colDestinoFondos = findCol(['DESTINO DE FONDOS'], ['DESTINO DE FONDOS', 'DESTINO FONDOS']);
 
             // Selección robusta de columnas GMV por encabezado, evitando depender de posiciones fijas.
@@ -257,7 +257,7 @@
                 .map(x => x.index);
             const colGMVValue = findGMVCol(['VENTA NETA', 'GMV', 'VENTAS'], ['VENTA NETA', 'GMV']);
             const colGMVGerencia = findGMVCol(['GERENCIA'], ['GERENCIA']);
-            const colGMVIdCategoria = findGMVCol(['ID CAT.', 'ID CATEGORIA', 'ID CAT'], ['ID CAT', 'ID CATEGORIA']);
+            const colGMVIdCategoria = findGMVCol(['ID CAT.', 'ID CAT', 'ID CATEGORIA', 'ID CATEGORÍA'], ['ID CAT']);
 
             // Elige la pareja de columnas de categoría con mayor solapamiento real entre ambas bases.
             // Esto evita tomar por error una columna auxiliar que también se llame “Categoría”.
@@ -288,48 +288,22 @@
                 });
             });
 
-            // Catálogo canónico de categorías y gerencias desde GMV.
-            // Se cruza por ID de categoría como clave primaria; el texto queda como fallback.
-            const canonicalCategoryByJoinKey = {};
-            const canonicalGerenciaByJoinKey = {};
-            const canonicalJoinKeyByNameKey = {};
-            const makeCategoryJoinKey = (idValue, nameValue) => {
-                const idNum = Number(idValue);
-                if (Number.isFinite(idNum) && idNum > 0) return 'ID:' + String(Math.trunc(idNum));
-                const idText = String(idValue || '').trim();
-                if (idText && idText !== '0') return 'ID:' + normalizeKey(idText);
-                const nameKey = normalizeKey(nameValue);
-                return nameKey ? 'NAME:' + nameKey : '';
-            };
-
+            // V4: catálogo maestro de categorías desde GMV.
+            // El ID de categoría es la clave primaria; el nombre normalizado es fallback.
+            const categoryMasterById = new Map();
+            const categoryMasterByName = new Map();
             jsonGMV.table.rows.forEach(r => {
-                const getVal = (idx) => (idx >= 0 && r.c[idx] && r.c[idx].v !== null) ? r.c[idx].v : '';
-                const rawCategory = getVal(colGMVCat);
-                const rawId = getVal(colGMVIdCategoria);
-                const joinKey = makeCategoryJoinKey(rawId, rawCategory);
-                const nameKey = normalizeKey(rawCategory);
-                if (!joinKey) return;
-                if (!canonicalCategoryByJoinKey[joinKey]) canonicalCategoryByJoinKey[joinKey] = displayCategory(rawCategory);
-                if (nameKey && !canonicalJoinKeyByNameKey[nameKey]) canonicalJoinKeyByNameKey[nameKey] = joinKey;
-                const ger = normalizeText(getVal(colGMVGerencia >= 0 ? colGMVGerencia : 6));
-                if (ger && !isExcludedGerencia(ger)) canonicalGerenciaByJoinKey[joinKey] = ger;
-            });
-
-            const resolveCampaignCategory = (row) => {
-                const getRowVal = (idx) => (idx >= 0 && row.c[idx] && row.c[idx].v !== null) ? row.c[idx].v : '';
-                const rawId = getRowVal(colIdCategoria);
-                let rawName = '';
-                for (const idx of (candidateCampCategoryCols.length ? candidateCampCategoryCols : [colCat])) {
-                    const candidate = getRowVal(idx);
-                    if (normalizeKey(candidate)) { rawName = candidate; break; }
-                }
-                let joinKey = makeCategoryJoinKey(rawId, rawName);
+                const cell = idx => (idx >= 0 && r.c[idx] && r.c[idx].v !== null) ? r.c[idx].v : '';
+                const rawId = cell(colGMVIdCategoria);
+                const id = String(rawId ?? '').trim().replace(/\.0$/, '');
+                const rawName = cell(colGMVCat);
+                const name = displayCategory(rawName);
                 const nameKey = normalizeKey(rawName);
-                if ((!joinKey || !canonicalCategoryByJoinKey[joinKey]) && nameKey && canonicalJoinKeyByNameKey[nameKey]) {
-                    joinKey = canonicalJoinKeyByNameKey[nameKey];
-                }
-                return { raw: rawName, id: rawId, key: joinKey, display: canonicalCategoryByJoinKey[joinKey] || displayCategory(rawName) };
-            };
+                const gerencia = normalizeText(cell(colGMVGerencia)) || 'SIN ASIGNAR';
+                const master = { id, name, nameKey, gerencia, gerenciaKey: normalizeKey(gerencia) };
+                if (id) categoryMasterById.set(id, master);
+                if (nameKey && !categoryMasterByName.has(nameKey)) categoryMasterByName.set(nameKey, master);
+            });
 
             // Determinar YTD dinámico
             let currentMonth = new Date().getMonth() + 1; // getMonth es 0-index
@@ -365,10 +339,12 @@
 
                 let marca = cleanMarca(getVal(colMarca));
                 if (marca.toUpperCase() === 'DESCONOCIDO' || marca === '0') return;
-                const categoriaResuelta = resolveCampaignCategory(r);
-                let categoriaRaw = categoriaResuelta.raw;
-                let categoria = categoriaResuelta.display;
-                let categoriaKey = categoriaResuelta.key;
+                let categoriaRaw = getVal(colCat);
+                const categoriaIdRaw = getVal(colIdCategoria);
+                const categoriaId = String(categoriaIdRaw ?? '').trim().replace(/\.0$/, '');
+                const masterCategoria = (categoriaId && categoryMasterById.get(categoriaId)) || categoryMasterByName.get(normalizeKey(categoriaRaw));
+                let categoria = masterCategoria ? masterCategoria.name : displayCategory(categoriaRaw);
+                let categoriaKey = masterCategoria ? masterCategoria.nameKey : normalizeKey(categoriaRaw);
                 let anio = parseYearValue(getVal(colAno));
                 let mes = parseMonthValue(getVal(colMes));
                 // Fallback: si MES/AÑO vienen vacíos o con formato no parseable, derivar desde Fecha.Mes (ej: 202606)
@@ -408,11 +384,8 @@
                 // Para visualizaciones por categoría/copiloto excluimos gerencias no accionables
                 // (N/A o Sin categorizar), pero mantenemos los KPIs globales y mensuales completos.
                 let grupo = 'SIN ASIGNAR';
-                // Para distribuir inversión por categoría no descartamos filas porque la gerencia
-                // de Campañas sea N/A/Sin categorizar. La gerencia canónica se hereda desde GMV.
-                let gerenciaCamp = normalizeText(getVal(colGerencia));
-                let gerencia = canonicalGerenciaByJoinKey[categoriaKey] || gerenciaCamp || 'SIN ASIGNAR';
-                if (isExcludedGerencia(gerencia)) gerencia = 'SIN ASIGNAR';
+                let gerencia = masterCategoria ? masterCategoria.gerencia : (normalizeText(getVal(colGerencia)) || 'SIN ASIGNAR');
+                if (isExcludedGerencia(gerencia)) return;
 
                 // Marcas
                 if (!marcasMap[marca]) marcasMap[marca] = { y25:0, y26:0, y25_ytd:0, y26_ytd:0 };
@@ -431,7 +404,7 @@
                     if(isYTD) { gruposMap[grupo].y26_ytd += inv; gerenciasMap[gerencia].y26_ytd += inv; }
                 }
                 
-                window.validRows.push({ marca: marca, marcaKey: normalizeKey(marca), anio: anio, categoria: categoria, categoriaKey: categoriaKey, inv: inv, isYTD: isYTD, grupo: grupo, gerencia: gerencia, gerenciaKey: normalizeKey(gerencia) });
+                window.validRows.push({ marca: marca, marcaKey: normalizeKey(marca), anio: anio, mes: mes, categoriaId: categoriaId, categoria: categoria, categoriaKey: categoriaKey, inv: inv, isYTD: isYTD, grupo: grupo, gerencia: gerencia, gerenciaKey: normalizeKey(gerencia) });
             });
 
             // Procesar GMV
@@ -446,40 +419,40 @@
                 let marca = cleanMarca(getVal(colGMVMarca >= 0 ? colGMVMarca : 1));
                 if (marca.toUpperCase() === 'DESCONOCIDO' || marca === '0') return;
                 let categoriaRaw = getVal(colGMVCat);
-                let categoriaIdRaw = getVal(colGMVIdCategoria);
-                let categoriaKey = makeCategoryJoinKey(categoriaIdRaw, categoriaRaw);
-                let categoria = canonicalCategoryByJoinKey[categoriaKey] || displayCategory(categoriaRaw);
+                const categoriaIdRaw = getVal(colGMVIdCategoria);
+                const categoriaId = String(categoriaIdRaw ?? '').trim().replace(/\.0$/, '');
+                const masterCategoria = (categoriaId && categoryMasterById.get(categoriaId)) || categoryMasterByName.get(normalizeKey(categoriaRaw));
+                let categoria = masterCategoria ? masterCategoria.name : displayCategory(categoriaRaw);
+                let categoriaKey = masterCategoria ? masterCategoria.nameKey : normalizeKey(categoriaRaw);
                 let gmv = cleanInv(getVal(colGMVValue >= 0 ? colGMVValue : 5));
                 if (gmv === 0) return;
                 
                 let isYTD = (mes <= mes_maximo_ytd);
                 
                 let grupo = 'SIN ASIGNAR';
-                // GERENCIA viene directamente en la hoja GMV (columna G)
-                let gerencia = normalizeText(getVal(colGMVGerencia >= 0 ? colGMVGerencia : 6)) || 'SIN ASIGNAR';
+                let gerencia = masterCategoria ? masterCategoria.gerencia : (normalizeText(getVal(colGMVGerencia >= 0 ? colGMVGerencia : 6)) || 'SIN ASIGNAR');
                 if (isExcludedGerencia(gerencia)) return;
-                window.validRowsGMV.push({ marca: marca, marcaKey: normalizeKey(marca), anio: anio, mes: mes, categoria: categoria, categoriaKey: categoriaKey, gmv: gmv, isYTD: isYTD, grupo: grupo, gerencia: gerencia, gerenciaKey: normalizeKey(gerencia) });
+                window.validRowsGMV.push({ marca: marca, marcaKey: normalizeKey(marca), anio: anio, mes: mes, categoriaId: categoriaId, categoria: categoria, categoriaKey: categoriaKey, gmv: gmv, isYTD: isYTD, grupo: grupo, gerencia: gerencia, gerenciaKey: normalizeKey(gerencia) });
             });
 
             const invYTDPorCategoria = window.validRows
                 .filter(r => r.anio === 2026 && r.isYTD)
                 .reduce((sum, r) => sum + r.inv, 0);
-            console.info('V3.9 · Control YTD y cruce por ID de categoría', {
+            console.info('V3.3 · Control YTD y cruce de categorías', {
                 corte: rango_ytd_str,
                 inversionGlobalYTD: inv_2026_ytd,
                 inversionYTDDisponibleParaCategorias: invYTDPorCategoria,
                 diferencia: inv_2026_ytd - invYTDPorCategoria,
                 columnaCategoriaCampanas: colCat,
-                columnaIdCategoriaCampanas: colIdCategoria,
                 columnaCategoriaGMV: colGMVCat,
-                columnaIdCategoriaGMV: colGMVIdCategoria,
-                categoriasCanonicasGMV: canonicalCategoryKeys.size,
-                filasInversion2026YTD: window.validRows.filter(r => r.anio === 2026 && r.isYTD).length,
-                categoriasConInversion2026YTD: new Set(window.validRows.filter(r => r.anio === 2026 && r.isYTD).map(r => r.categoriaKey)).size
+                solapamientoCategorias: bestOverlap,
+                colIdCategoriaCampanas: colIdCategoria,
+                colIdCategoriaGMV: colGMVIdCategoria,
+                categoriasMaestrasPorId: categoryMasterById.size
             });
 
             // Procesar KPIs Globales
-            let var_fy = inv_2025_ytd > 0 ? ((inv_2026_ytd / inv_2025_ytd) - 1) * 100 : 0;
+            let var_fy = inv_2025_fy > 0 ? ((inv_2026_fy / inv_2025_fy) - 1) * 100 : 0;
             let var_ytd = inv_2025_ytd > 0 ? ((inv_2026_ytd / inv_2025_ytd) - 1) * 100 : 0;
 
             const formatVarHtml = (val) => {
@@ -496,9 +469,8 @@
                 colGerencia,
                 colDestinoFondos,
                 colCategoriaCampanas: colCat,
-                colIdCategoriaCampanas: colIdCategoria,
                 colCategoriaGMV: colGMVCat,
-                colIdCategoriaGMV: colGMVIdCategoria
+                solapamientoCategorias: bestOverlap
             });
             console.info('Control DESTINO DE FONDOS 2025', {
                 ...controlDestinoFondos2025,
@@ -778,10 +750,11 @@
                 if (r.anio === 2026 && r.isYTD) {
                     const catDisplay = displayCategory(r.categoria);
                     const catNorm = r.categoriaKey || normalizeKey(r.categoria);
+                    const catJoinKey = r.categoriaId ? ('ID:' + r.categoriaId) : ('NAME:' + catNorm);
                     const gerKey = r.gerenciaKey || normalizeKey(r.gerencia);
                     const marcaKey = r.marcaKey || normalizeKey(r.marca);
-                    let key = marcaKey + '||' + catNorm;
-                    if (!gmvMarcaCatMap[key]) gmvMarcaCatMap[key] = { marca: r.marca, marcaKey: marcaKey, categoria: catDisplay, categoriaKey: catNorm, grupo: r.grupo, gerencia: r.gerencia, gerenciaKey: gerKey, gmv: 0, inv: 0 };
+                    let key = marcaKey + '||' + catJoinKey;
+                    if (!gmvMarcaCatMap[key]) gmvMarcaCatMap[key] = { marca: r.marca, marcaKey: marcaKey, categoriaId: r.categoriaId || '', categoria: catDisplay, categoriaKey: catNorm, categoryJoinKey: catJoinKey, grupo: r.grupo, gerencia: r.gerencia, gerenciaKey: gerKey, gmv: 0, inv: 0 };
                     gmvMarcaCatMap[key].gmv += r.gmv;
                     
                     const catBucket = ensureCategoryBucket(catDisplay, catNorm, r.gerencia, gerKey);
@@ -800,9 +773,10 @@
                 if (r.anio === 2026 && r.isYTD) {
                     const catDisplay = displayCategory(r.categoria);
                     const catNorm = r.categoriaKey || normalizeKey(r.categoria);
+                    const catJoinKey = r.categoriaId ? ('ID:' + r.categoriaId) : ('NAME:' + catNorm);
                     const gerKey = r.gerenciaKey || normalizeKey(r.gerencia);
                     const marcaKey = r.marcaKey || normalizeKey(r.marca);
-                    let key = marcaKey + '||' + catNorm;
+                    let key = marcaKey + '||' + catJoinKey;
                     if (gmvMarcaCatMap[key]) gmvMarcaCatMap[key].inv += r.inv;
                     
                     const catBucket = ensureCategoryBucket(catDisplay, catNorm, r.gerencia, gerKey);
