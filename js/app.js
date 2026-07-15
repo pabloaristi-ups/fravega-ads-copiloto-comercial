@@ -286,43 +286,35 @@
                 });
             });
 
-
-            // Catálogo maestro de categorías tomado desde GMV.
-            // Se utiliza para resolver la categoría de cada fila de Campañas de forma individual,
-            // porque la hoja puede contener más de una columna cuyo encabezado incluye "Categoría".
-            const gmvCategoryMaster = new Map();
-            const gmvCategoryKeys = new Set();
+            // Catálogo canónico de categorías y gerencias desde GMV.
+            // GMV es la fuente maestra para la taxonomía usada en Análisis y Copiloto.
+            const canonicalCategoryByKey = {};
+            const canonicalGerenciaByCategoryKey = {};
             jsonGMV.table.rows.forEach(r => {
-                const getGMVVal = (idx) => (idx >= 0 && r.c[idx] && r.c[idx].v !== null) ? r.c[idx].v : '';
-                candidateGMVCategoryCols.forEach(idx => {
-                    const raw = getGMVVal(idx);
-                    const key = normalizeKey(raw);
-                    if (!key) return;
-                    gmvCategoryKeys.add(key);
-                    if (!gmvCategoryMaster.has(key)) {
-                        const gerenciaRaw = getGMVVal(colGMVGerencia >= 0 ? colGMVGerencia : 6);
-                        gmvCategoryMaster.set(key, {
-                            categoria: displayCategory(raw),
-                            gerencia: normalizeText(gerenciaRaw) || 'SIN ASIGNAR'
-                        });
-                    }
-                });
+                const getVal = (idx) => (idx >= 0 && r.c[idx] && r.c[idx].v !== null) ? r.c[idx].v : '';
+                const rawCategory = getVal(colGMVCat);
+                const key = normalizeKey(rawCategory);
+                if (!key) return;
+                if (!canonicalCategoryByKey[key]) canonicalCategoryByKey[key] = displayCategory(rawCategory);
+                const ger = normalizeText(getVal(colGMVGerencia >= 0 ? colGMVGerencia : 6));
+                if (ger && !isExcludedGerencia(ger)) canonicalGerenciaByCategoryKey[key] = ger;
             });
+            const canonicalCategoryKeys = new Set(Object.keys(canonicalCategoryByKey));
 
+            // Resuelve la categoría de cada fila de Campañas probando todas las columnas candidatas.
+            // Prioriza coincidencia exacta con el catálogo GMV y evita depender de una única columna global.
             const resolveCampaignCategory = (row) => {
-                // Prioriza el valor de cualquiera de las columnas candidatas que exista realmente en GMV.
-                for (const idx of candidateCampCategoryCols) {
+                const candidates = candidateCampCategoryCols.length ? candidateCampCategoryCols : [colCat];
+                for (const idx of candidates) {
                     const raw = (idx >= 0 && row.c[idx] && row.c[idx].v !== null) ? row.c[idx].v : '';
                     const key = normalizeKey(raw);
-                    if (key && gmvCategoryKeys.has(key)) {
-                        const master = gmvCategoryMaster.get(key);
-                        return { raw, key, display: master ? master.categoria : displayCategory(raw), master };
+                    if (key && canonicalCategoryKeys.has(key)) {
+                        return { raw, key, display: canonicalCategoryByKey[key] };
                     }
                 }
-                // Fallback a la columna elegida por solapamiento para no perder filas no presentes en GMV.
-                const raw = (colCat >= 0 && row.c[colCat] && row.c[colCat].v !== null) ? row.c[colCat].v : '';
-                const key = normalizeKey(raw);
-                return { raw, key, display: displayCategory(raw), master: gmvCategoryMaster.get(key) || null };
+                const fallbackRaw = (colCat >= 0 && row.c[colCat] && row.c[colCat].v !== null) ? row.c[colCat].v : '';
+                const fallbackKey = normalizeKey(fallbackRaw);
+                return { raw: fallbackRaw, key: fallbackKey, display: displayCategory(fallbackRaw) };
             };
 
             // Determinar YTD dinámico
@@ -402,12 +394,11 @@
                 // Para visualizaciones por categoría/copiloto excluimos gerencias no accionables
                 // (N/A o Sin categorizar), pero mantenemos los KPIs globales y mensuales completos.
                 let grupo = 'SIN ASIGNAR';
-                // Para categorías y Copiloto, GMV es la fuente maestra de clasificación.
-                // Solo se usa la gerencia de Campañas cuando la categoría no existe en GMV.
-                let gerencia = categoriaResuelta.master && categoriaResuelta.master.gerencia
-                    ? categoriaResuelta.master.gerencia
-                    : (normalizeText(getVal(colGerencia)) || 'SIN ASIGNAR');
-                if (isExcludedGerencia(gerencia)) return;
+                // Para distribuir inversión por categoría no descartamos filas porque la gerencia
+                // de Campañas sea N/A/Sin categorizar. La gerencia canónica se hereda desde GMV.
+                let gerenciaCamp = normalizeText(getVal(colGerencia));
+                let gerencia = canonicalGerenciaByCategoryKey[categoriaKey] || gerenciaCamp || 'SIN ASIGNAR';
+                if (isExcludedGerencia(gerencia)) gerencia = 'SIN ASIGNAR';
 
                 // Marcas
                 if (!marcasMap[marca]) marcasMap[marca] = { y25:0, y26:0, y25_ytd:0, y26_ytd:0 };
@@ -466,8 +457,9 @@
                 columnaCategoriaCampanas: colCat,
                 columnaCategoriaGMV: colGMVCat,
                 solapamientoCategorias: bestOverlap,
-                categoriasMaestrasGMV: gmvCategoryKeys.size,
-                filasCampanasYTD2026Asociadas: window.validRows.filter(r => r.anio === 2026 && r.isYTD && r.categoriaKey && gmvCategoryKeys.has(r.categoriaKey)).length
+                categoriasCanonicasGMV: canonicalCategoryKeys.size,
+                filasInversion2026YTD: window.validRows.filter(r => r.anio === 2026 && r.isYTD).length,
+                categoriasConInversion2026YTD: new Set(window.validRows.filter(r => r.anio === 2026 && r.isYTD).map(r => r.categoriaKey)).size
             });
 
             // Procesar KPIs Globales
