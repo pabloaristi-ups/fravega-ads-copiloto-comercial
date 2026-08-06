@@ -1,6 +1,6 @@
-# Retail Media Intelligence V3.3 estable
+# Retail Media Intelligence V4.1 estable
 
-Esta versión vuelve a la última base estable y aplica una corrección acotada, sin los parches de V3.0–V3.2.
+Esta versión consolida el dashboard en una única implementación y un dataset maestro compartido.
 
 ## Correcciones
 
@@ -11,11 +11,15 @@ Esta versión vuelve a la última base estable y aplica una corrección acotada,
 - Se mantienen fuera de las visualizaciones las gerencias N/A y Sin categorizar.
 - Timeout de 30 segundos: la pantalla ya no queda cargando indefinidamente.
 - Controles de reconciliación disponibles en la consola del navegador.
+- Tres solapas operativas: Dashboard Ejecutivo, Análisis por Categoría y Copiloto Comercial.
+- Una sola fuente de código en `js/app-v4.js`; el bloque legado del HTML queda inactivo.
 
 ## Publicación en GitHub
 
-Reemplazar únicamente:
+Publicar como conjunto:
 
-- `js/app.js`
+- `index.html`
+- `js/app-v4.js`
+- `css/dashboard.css`
 
-No es necesario reemplazar `index.html` ni `css/dashboard.css` si el sitio ya conserva la estructura correcta.
+Publicar los tres archivos juntos para evitar mezclar estructuras antiguas con la lógica V4.1.

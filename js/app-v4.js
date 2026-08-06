@@ -314,7 +314,9 @@
             const nombreMesCorte = nombresMesesAbrev[mes_maximo_ytd - 1];
             const rango_ytd_str = `Ene-${nombreMesCorte}`;
 
-            // Datos estructurados
+            // Un único corte alimenta Dashboard, Análisis y Copiloto.
+            // Los datasets maestros conservan todas las filas válidas; las vistas derivadas
+            // aplican solamente la exclusión visual de gerencias no accionables.
             let inv_2025_fy = 0, inv_2026_fy = 0;
             let inv_2025_ytd = 0, inv_2026_ytd = 0;
             let inv_mensual_2025 = new Array(12).fill(0);
@@ -325,6 +327,7 @@
             let gerenciasMap = {};
 
             // Recorrer el formato JSON de rows
+            window.masterDataset = { cutoffMonth: mes_maximo_ytd, investment: [], gmv: [] };
             window.validRows = [];
             const controlDestinoFondos2025 = { ajuste: 0, coop: 0, montoExcluido: 0, filasExcluidas: 0 };
             rows.forEach(r => {
@@ -385,6 +388,8 @@
                 // (N/A o Sin categorizar), pero mantenemos los KPIs globales y mensuales completos.
                 let grupo = 'SIN ASIGNAR';
                 let gerencia = masterCategoria ? masterCategoria.gerencia : (normalizeText(getVal(colGerencia)) || 'SIN ASIGNAR');
+                const investmentRow = { marca: marca, marcaKey: normalizeKey(marca), anio: anio, mes: mes, categoriaId: categoriaId, categoria: categoria, categoriaKey: categoriaKey, inv: inv, isYTD: isYTD, grupo: grupo, gerencia: gerencia, gerenciaKey: normalizeKey(gerencia) };
+                window.masterDataset.investment.push(investmentRow);
                 if (isExcludedGerencia(gerencia)) return;
 
                 // Marcas
@@ -404,7 +409,7 @@
                     if(isYTD) { gruposMap[grupo].y26_ytd += inv; gerenciasMap[gerencia].y26_ytd += inv; }
                 }
                 
-                window.validRows.push({ marca: marca, marcaKey: normalizeKey(marca), anio: anio, mes: mes, categoriaId: categoriaId, categoria: categoria, categoriaKey: categoriaKey, inv: inv, isYTD: isYTD, grupo: grupo, gerencia: gerencia, gerenciaKey: normalizeKey(gerencia) });
+                window.validRows.push(investmentRow);
             });
 
             // Procesar GMV
@@ -431,18 +436,47 @@
                 
                 let grupo = 'SIN ASIGNAR';
                 let gerencia = masterCategoria ? masterCategoria.gerencia : (normalizeText(getVal(colGMVGerencia >= 0 ? colGMVGerencia : 6)) || 'SIN ASIGNAR');
+                const gmvRow = { marca: marca, marcaKey: normalizeKey(marca), anio: anio, mes: mes, categoriaId: categoriaId, categoria: categoria, categoriaKey: categoriaKey, gmv: gmv, isYTD: isYTD, grupo: grupo, gerencia: gerencia, gerenciaKey: normalizeKey(gerencia) };
+                window.masterDataset.gmv.push(gmvRow);
                 if (isExcludedGerencia(gerencia)) return;
-                window.validRowsGMV.push({ marca: marca, marcaKey: normalizeKey(marca), anio: anio, mes: mes, categoriaId: categoriaId, categoria: categoria, categoriaKey: categoriaKey, gmv: gmv, isYTD: isYTD, grupo: grupo, gerencia: gerencia, gerenciaKey: normalizeKey(gerencia) });
+                window.validRowsGMV.push(gmvRow);
             });
 
-            const invYTDPorCategoria = window.validRows
+            const invYTDPorCategoria = window.masterDataset.investment
                 .filter(r => r.anio === 2026 && r.isYTD)
                 .reduce((sum, r) => sum + r.inv, 0);
-            console.info('V3.3 · Control YTD y cruce de categorías', {
+            const invYTDVisual = window.validRows
+                .filter(r => r.anio === 2026 && r.isYTD)
+                .reduce((sum, r) => sum + r.inv, 0);
+            const reconciliationTolerance = 0.01;
+            const reconciliation = {
+                globalVsMasterCategoryDelta: inv_2026_ytd - invYTDPorCategoria,
+                visualCategoryTotal: invYTDVisual,
+                excludedVisualTotal: invYTDPorCategoria - invYTDVisual
+            };
+            window.dashboardAudit = {
+                cutoffMonth: mes_maximo_ytd,
+                cutoffLabel: rango_ytd_str,
+                investmentYTD2026: inv_2026_ytd,
+                investmentYTD2025: inv_2025_ytd,
+                investmentFY2026: inv_2026_fy,
+                investmentFY2025: inv_2025_fy,
+                reconciliation,
+                reconciled: Math.abs(reconciliation.globalVsMasterCategoryDelta) <= reconciliationTolerance
+            };
+            document.documentElement.dataset.ytdCutoff = String(mes_maximo_ytd);
+            document.documentElement.dataset.investmentYtd2026 = String(inv_2026_ytd);
+            document.documentElement.dataset.categoryInvestmentYtd2026 = String(invYTDPorCategoria);
+            document.documentElement.dataset.reconciliationDelta = String(reconciliation.globalVsMasterCategoryDelta);
+            document.documentElement.dataset.reconciled = String(window.dashboardAudit.reconciled);
+            console.info('V4.1 · Control YTD y cruce de categorías', {
                 corte: rango_ytd_str,
                 inversionGlobalYTD: inv_2026_ytd,
                 inversionYTDDisponibleParaCategorias: invYTDPorCategoria,
-                diferencia: inv_2026_ytd - invYTDPorCategoria,
+                diferencia: reconciliation.globalVsMasterCategoryDelta,
+                inversionYTDVisible: invYTDVisual,
+                inversionYTDExcluidaSoloDeVisualizaciones: reconciliation.excludedVisualTotal,
+                reconciliado: window.dashboardAudit.reconciled,
                 columnaCategoriaCampanas: colCat,
                 columnaCategoriaGMV: colGMVCat,
                 solapamientoCategorias: bestOverlap,
@@ -476,7 +510,7 @@
                 ...controlDestinoFondos2025,
                 montoExcluidoFormateado: formatMoney(controlDestinoFondos2025.montoExcluido)
             });
-            console.log('V3.3 estable - Visualizaciones excluyen gerencias no accionables', {excluidas: ['N/A', 'Sin categorizar']});
+            console.log('V4.1 estable - Visualizaciones excluyen gerencias no accionables', {excluidas: ['N/A', 'Sin categorizar']});
             $('#header-subtitle').text(`Conectado en vivo al Checklist. Datos hasta YTD ${rango_ytd_str}`);
             $('#kpi-inv-fy').text(formatMoney(inv_2026_ytd));
             $('#kpi-var-fy').html(formatVarHtml(var_fy));

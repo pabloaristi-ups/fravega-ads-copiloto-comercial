@@ -10,6 +10,7 @@
     <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
     <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+    <link rel="stylesheet" href="css/dashboard.css">
     <style>
         :root {
             --primary: #4F46E5; --background: #0F172A; --card-bg: #1E293B;
@@ -108,8 +109,9 @@
         </div>
 
         <div class="main-tabs">
-            <button class="main-tab-btn active" onclick="switchMainTab('inversion', this)">Análisis de Inversión</button>
-            <button class="main-tab-btn" onclick="switchMainTab('eficiencia', this)">Análisis de Facturación y Eficiencia</button>
+            <button class="main-tab-btn active" onclick="switchMainTab('inversion', this)">Dashboard Ejecutivo</button>
+            <button class="main-tab-btn" onclick="switchMainTab('eficiencia', this)">Análisis por Categoría</button>
+            <button class="main-tab-btn" onclick="switchMainTab('copiloto', this)">Copiloto Comercial</button>
         </div>
 
         <div id="tab-inversion" class="main-tab-content">
@@ -286,10 +288,19 @@
             </div>
         </div>
 
+        </div> <!-- End Tab 2 -->
+
+        <div id="tab-copiloto" class="main-tab-content" style="display:none;">
         <div class="card" style="margin-bottom: 2rem;">
             <div class="card-header-flex">
-                <h2 class="card-title">Análisis Exhaustivo por Categoría</h2>
+                <h2 class="card-title">Copiloto Comercial por Categoría</h2>
+                <div>
+                    <select id="copilotGerenciaFilter"><option value="">Todas las gerencias</option></select>
+                    <button id="copilotClearFilters" type="button">Limpiar filtros</button>
+                    <button type="button" onclick="openCopilotHelp()">Cómo leerlo</button>
+                </div>
             </div>
+            <div id="top-opportunities" class="opportunity-grid"></div>
             <div class="table-container">
                 <table id="exhCatTable" class="display">
                     <thead>
@@ -298,7 +309,12 @@
                             <th>GMV (YTD)</th>
                             <th>Inv. (YTD)</th>
                             <th>A/S Ratio %</th>
-                            <th>Oportunidad / Status</th>
+                            <th>Benchmark</th>
+                            <th>Brecha</th>
+                            <th>Potencial</th>
+                            <th>Score</th>
+                            <th>Estado</th>
+                            <th>Acción recomendada</th>
                         </tr>
                     </thead>
                     <tbody id="exh-cat-table-body">
@@ -307,8 +323,20 @@
             </div>
         </div>
 
+        <div id="copilot-help-modal" class="modal-backdrop">
+            <div class="modal-card">
+                <button class="modal-close" onclick="closeCopilotHelp()">Cerrar</button>
+                <h2>Cómo leer el Copiloto Comercial</h2>
+                <p>Prioriza categorías combinando GMV YTD, inversión RM YTD, brecha contra el benchmark de su gerencia y cantidad de marcas activas.</p>
+            </div>
+        </div>
+        <div id="copilot-action-modal" class="modal-backdrop">
+            <div id="copilot-action-content" class="modal-card action-modal-card"></div>
+        </div>
+        </div> <!-- End Tab 3 -->
+
     <!-- Script JSONP añadido dinámicamente -->
-    <script>
+    <script type="text/plain" id="legacy-inline-dashboard">
         // Endpoint base de Google Sheets
         const BASE_URL_CAMP = 'https://docs.google.com/spreadsheets/d/1HNmm5seJwrSbWw4VkSPoYfwsj8R2gezxPJPmn9a5nFo/gviz/tq?gid=1808937830';
         const BASE_URL_GMV  = 'https://docs.google.com/spreadsheets/d/1tfz10mJDhwg9pPauk-RhWOnL9jFm-aeYi39qmjDKluQ/gviz/tq?sheet=GMV';
@@ -1183,6 +1211,7 @@
             window.dispatchEvent(new Event('resize'));
         }
     </script>
+    <script src="js/app-v4.js?v=4.1.0"></script>
 </div> <!-- Close Tab 2 -->
 </div> <!-- Close container -->
 </body>
