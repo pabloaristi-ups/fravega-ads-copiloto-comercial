@@ -1091,8 +1091,6 @@
                 </tr>`;
             });
 
-            renderTopOpportunities(copilotRows);
-
             if ($.fn.DataTable.isDataTable('#exhCatTable')) {
                 $('#exhCatTable').DataTable().destroy();
             }
@@ -1117,8 +1115,18 @@
                 const idx = $(this).find('.action-button').attr('data-index');
                 openCopilotAction(Number(idx));
             });
-            $('#copilotGerenciaFilter').off('change').on('change', function(){ copilotTable.draw(); });
-            $('#copilotClearFilters').off('click').on('click', function(){ $('#copilotGerenciaFilter').val(''); copilotTable.draw(); });
+            const applyCopilotGerenciaFilter = () => {
+                const selected = $('#copilotGerenciaFilter').val() || '';
+                copilotTable.draw();
+                const filteredRows = selected ? copilotRows.filter(r => (r.gerencia || 'SIN ASIGNAR') === selected) : copilotRows;
+                renderTopOpportunities(filteredRows);
+            };
+            $('#copilotGerenciaFilter').off('change').on('change', applyCopilotGerenciaFilter);
+            $('#copilotClearFilters').off('click').on('click', function(){
+                $('#copilotGerenciaFilter').val('');
+                applyCopilotGerenciaFilter();
+            });
+            applyCopilotGerenciaFilter();
         };
 
 

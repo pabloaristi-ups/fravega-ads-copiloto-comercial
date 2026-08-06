@@ -1,4 +1,4 @@
-# Retail Media Intelligence V4.1 estable
+# Retail Media Intelligence V4.1.1 estable
 
 Esta versión consolida el dashboard en una única implementación y un dataset maestro compartido.
 
@@ -13,6 +13,8 @@ Esta versión consolida el dashboard en una única implementación y un dataset 
 - Controles de reconciliación disponibles en la consola del navegador.
 - Tres solapas operativas: Dashboard Ejecutivo, Análisis por Categoría y Copiloto Comercial.
 - Una sola fuente de código en `js/app-v4.js`; el bloque legado del HTML queda inactivo.
+- Recomendaciones del Copiloto en grilla horizontal adaptable.
+- Filtro de gerencia sincronizado entre recomendaciones y tabla, con limpieza funcional.
 
 ## Publicación en GitHub
 
@@ -22,4 +24,4 @@ Publicar como conjunto:
 - `js/app-v4.js`
 - `css/dashboard.css`
 
-Publicar los tres archivos juntos para evitar mezclar estructuras antiguas con la lógica V4.1.
+Publicar los tres archivos juntos para evitar mezclar estructuras antiguas con la lógica V4.1.1.
