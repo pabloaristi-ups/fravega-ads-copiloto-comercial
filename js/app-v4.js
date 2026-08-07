@@ -314,7 +314,9 @@
             const nombreMesCorte = nombresMesesAbrev[mes_maximo_ytd - 1];
             const rango_ytd_str = `Ene-${nombreMesCorte}`;
 
-            // Datos estructurados
+            // Un único corte alimenta Dashboard, Análisis y Copiloto.
+            // Los datasets maestros conservan todas las filas válidas; las vistas derivadas
+            // aplican solamente la exclusión visual de gerencias no accionables.
             let inv_2025_fy = 0, inv_2026_fy = 0;
             let inv_2025_ytd = 0, inv_2026_ytd = 0;
             let inv_mensual_2025 = new Array(12).fill(0);
@@ -325,6 +327,7 @@
             let gerenciasMap = {};
 
             // Recorrer el formato JSON de rows
+            window.masterDataset = { cutoffMonth: mes_maximo_ytd, investment: [], gmv: [] };
             window.validRows = [];
             const controlDestinoFondos2025 = { ajuste: 0, coop: 0, montoExcluido: 0, filasExcluidas: 0 };
             rows.forEach(r => {
@@ -385,6 +388,8 @@
                 // (N/A o Sin categorizar), pero mantenemos los KPIs globales y mensuales completos.
                 let grupo = 'SIN ASIGNAR';
                 let gerencia = masterCategoria ? masterCategoria.gerencia : (normalizeText(getVal(colGerencia)) || 'SIN ASIGNAR');
+                const investmentRow = { marca: marca, marcaKey: normalizeKey(marca), anio: anio, mes: mes, categoriaId: categoriaId, categoria: categoria, categoriaKey: categoriaKey, inv: inv, isYTD: isYTD, grupo: grupo, gerencia: gerencia, gerenciaKey: normalizeKey(gerencia) };
+                window.masterDataset.investment.push(investmentRow);
                 if (isExcludedGerencia(gerencia)) return;
 
                 // Marcas
@@ -404,7 +409,7 @@
                     if(isYTD) { gruposMap[grupo].y26_ytd += inv; gerenciasMap[gerencia].y26_ytd += inv; }
                 }
                 
-                window.validRows.push({ marca: marca, marcaKey: normalizeKey(marca), anio: anio, mes: mes, categoriaId: categoriaId, categoria: categoria, categoriaKey: categoriaKey, inv: inv, isYTD: isYTD, grupo: grupo, gerencia: gerencia, gerenciaKey: normalizeKey(gerencia) });
+                window.validRows.push(investmentRow);
             });
 
             // Procesar GMV
@@ -431,18 +436,47 @@
                 
                 let grupo = 'SIN ASIGNAR';
                 let gerencia = masterCategoria ? masterCategoria.gerencia : (normalizeText(getVal(colGMVGerencia >= 0 ? colGMVGerencia : 6)) || 'SIN ASIGNAR');
+                const gmvRow = { marca: marca, marcaKey: normalizeKey(marca), anio: anio, mes: mes, categoriaId: categoriaId, categoria: categoria, categoriaKey: categoriaKey, gmv: gmv, isYTD: isYTD, grupo: grupo, gerencia: gerencia, gerenciaKey: normalizeKey(gerencia) };
+                window.masterDataset.gmv.push(gmvRow);
                 if (isExcludedGerencia(gerencia)) return;
-                window.validRowsGMV.push({ marca: marca, marcaKey: normalizeKey(marca), anio: anio, mes: mes, categoriaId: categoriaId, categoria: categoria, categoriaKey: categoriaKey, gmv: gmv, isYTD: isYTD, grupo: grupo, gerencia: gerencia, gerenciaKey: normalizeKey(gerencia) });
+                window.validRowsGMV.push(gmvRow);
             });
 
-            const invYTDPorCategoria = window.validRows
+            const invYTDPorCategoria = window.masterDataset.investment
                 .filter(r => r.anio === 2026 && r.isYTD)
                 .reduce((sum, r) => sum + r.inv, 0);
-            console.info('V3.3 · Control YTD y cruce de categorías', {
+            const invYTDVisual = window.validRows
+                .filter(r => r.anio === 2026 && r.isYTD)
+                .reduce((sum, r) => sum + r.inv, 0);
+            const reconciliationTolerance = 0.01;
+            const reconciliation = {
+                globalVsMasterCategoryDelta: inv_2026_ytd - invYTDPorCategoria,
+                visualCategoryTotal: invYTDVisual,
+                excludedVisualTotal: invYTDPorCategoria - invYTDVisual
+            };
+            window.dashboardAudit = {
+                cutoffMonth: mes_maximo_ytd,
+                cutoffLabel: rango_ytd_str,
+                investmentYTD2026: inv_2026_ytd,
+                investmentYTD2025: inv_2025_ytd,
+                investmentFY2026: inv_2026_fy,
+                investmentFY2025: inv_2025_fy,
+                reconciliation,
+                reconciled: Math.abs(reconciliation.globalVsMasterCategoryDelta) <= reconciliationTolerance
+            };
+            document.documentElement.dataset.ytdCutoff = String(mes_maximo_ytd);
+            document.documentElement.dataset.investmentYtd2026 = String(inv_2026_ytd);
+            document.documentElement.dataset.categoryInvestmentYtd2026 = String(invYTDPorCategoria);
+            document.documentElement.dataset.reconciliationDelta = String(reconciliation.globalVsMasterCategoryDelta);
+            document.documentElement.dataset.reconciled = String(window.dashboardAudit.reconciled);
+            console.info('V4.1 · Control YTD y cruce de categorías', {
                 corte: rango_ytd_str,
                 inversionGlobalYTD: inv_2026_ytd,
                 inversionYTDDisponibleParaCategorias: invYTDPorCategoria,
-                diferencia: inv_2026_ytd - invYTDPorCategoria,
+                diferencia: reconciliation.globalVsMasterCategoryDelta,
+                inversionYTDVisible: invYTDVisual,
+                inversionYTDExcluidaSoloDeVisualizaciones: reconciliation.excludedVisualTotal,
+                reconciliado: window.dashboardAudit.reconciled,
                 columnaCategoriaCampanas: colCat,
                 columnaCategoriaGMV: colGMVCat,
                 solapamientoCategorias: bestOverlap,
@@ -476,7 +510,7 @@
                 ...controlDestinoFondos2025,
                 montoExcluidoFormateado: formatMoney(controlDestinoFondos2025.montoExcluido)
             });
-            console.log('V3.3 estable - Visualizaciones excluyen gerencias no accionables', {excluidas: ['N/A', 'Sin categorizar']});
+            console.log('V4.1 estable - Visualizaciones excluyen gerencias no accionables', {excluidas: ['N/A', 'Sin categorizar']});
             $('#header-subtitle').text(`Conectado en vivo al Checklist. Datos hasta YTD ${rango_ytd_str}`);
             $('#kpi-inv-fy').text(formatMoney(inv_2026_ytd));
             $('#kpi-var-fy').html(formatVarHtml(var_fy));
@@ -717,6 +751,94 @@
 
         let gmvChart;
 
+        function renderMonthlyCategoryAS(selectedCategoryKey = '__TOP__') {
+            const canvas = document.getElementById('monthlyCategoryASChart');
+            const $filter = $('#monthlyCategoryASFilter');
+            if (!canvas || !$filter.length) return;
+
+            const cutoffMonth = window.masterDataset ? window.masterDataset.cutoffMonth : 12;
+            const monthLabels = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'].slice(0, cutoffMonth);
+            const monthlyInvestmentTotals = new Array(cutoffMonth).fill(0);
+            const monthlyGmvTotals = new Array(cutoffMonth).fill(0);
+            const categories = new Map();
+            const ensureCategory = row => {
+                const key = row.categoriaKey || normalizeKey(row.categoria);
+                if (!key) return null;
+                if (!categories.has(key)) categories.set(key, { key, name: displayCategory(row.categoria), inv: new Array(cutoffMonth).fill(0), gmv: new Array(cutoffMonth).fill(0) });
+                return categories.get(key);
+            };
+
+            window.validRowsGMV.filter(r => r.anio === 2026 && r.mes >= 1 && r.mes <= cutoffMonth).forEach(r => {
+                const category = ensureCategory(r);
+                if (category) category.gmv[r.mes - 1] += r.gmv;
+                monthlyGmvTotals[r.mes - 1] += r.gmv;
+            });
+            window.validRows.filter(r => r.anio === 2026 && r.mes >= 1 && r.mes <= cutoffMonth).forEach(r => {
+                const category = ensureCategory(r);
+                if (category) category.inv[r.mes - 1] += r.inv;
+                monthlyInvestmentTotals[r.mes - 1] += r.inv;
+            });
+
+            const missingGmvMonths = monthLabels.filter((label, index) => monthlyInvestmentTotals[index] > 0 && monthlyGmvTotals[index] === 0);
+            const lastGmvMonthIndex = monthlyGmvTotals.reduce((last, value, index) => value !== 0 ? index : last, -1);
+            if (missingGmvMonths.length) {
+                const pendingInvestment = monthlyInvestmentTotals
+                    .filter((value, index) => monthlyInvestmentTotals[index] > 0 && monthlyGmvTotals[index] === 0)
+                    .reduce((sum, value) => sum + value, 0);
+                $('#monthlyCategoryASDataStatus').text(`GMV disponible hasta ${lastGmvMonthIndex >= 0 ? monthLabels[lastGmvMonthIndex] : 'sin datos'}. ${missingGmvMonths.join(', ')} tiene ${formatMoney(pendingInvestment)} de inversión, pero aún no tiene GMV en la fuente; el ratio queda pendiente.`).show();
+            } else {
+                $('#monthlyCategoryASDataStatus').text(`Inversión y GMV disponibles hasta ${monthLabels[cutoffMonth - 1]}.`).show();
+            }
+
+            const categoryList = Array.from(categories.values())
+                .filter(c => c.gmv.some(v => v > 0) || c.inv.some(v => v > 0))
+                .sort((a, b) => b.gmv.reduce((s, v) => s + v, 0) - a.gmv.reduce((s, v) => s + v, 0));
+            const currentValue = selectedCategoryKey || $filter.val() || '__TOP__';
+            $filter.empty().append('<option value="__TOP__">Top 8 categorías por GMV</option>');
+            categoryList.forEach(c => $filter.append($('<option>', { value: c.key, text: c.name })));
+            $filter.val(categoryList.some(c => c.key === currentValue) ? currentValue : '__TOP__');
+
+            const selectedValue = $filter.val();
+            const displayedCategories = selectedValue === '__TOP__' ? categoryList.slice(0, 8) : categoryList.filter(c => c.key === selectedValue);
+            const colors = ['#818CF8', '#F59E0B', '#10B981', '#F472B6', '#38BDF8', '#A78BFA', '#F87171', '#FACC15'];
+            const datasets = displayedCategories.map((c, index) => ({
+                label: c.name,
+                data: c.gmv.map((gmv, monthIndex) => gmv > 0 ? (c.inv[monthIndex] / gmv) * 100 : null),
+                borderColor: colors[index % colors.length],
+                backgroundColor: colors[index % colors.length],
+                borderWidth: selectedValue === '__TOP__' ? 2 : 3,
+                pointRadius: selectedValue === '__TOP__' ? 3 : 4,
+                pointHoverRadius: 6,
+                tension: 0.28,
+                spanGaps: false
+            }));
+
+            if (window.monthlyCategoryASChartInstance) window.monthlyCategoryASChartInstance.destroy();
+            window.monthlyCategoryASChartInstance = new Chart(canvas.getContext('2d'), {
+                type: 'line',
+                data: { labels: monthLabels, datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { position: 'bottom', labels: { color: '#CBD5E1', usePointStyle: true, padding: 16 } },
+                        tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y === null ? 'Sin GMV' : ctx.parsed.y.toFixed(2) + '%'}` } }
+                    },
+                    scales: {
+                        x: { ticks: { color: '#94A3B8' }, grid: { color: 'rgba(148,163,184,.08)' } },
+                        y: { beginAtZero: true, ticks: { color: '#94A3B8', callback: value => Number(value).toFixed(2) + '%' }, grid: { color: 'rgba(148,163,184,.12)' }, title: { display: true, text: 'A/S Ratio mensual', color: '#CBD5E1' } }
+                    }
+                }
+            });
+            canvas.dataset.months = monthLabels.join(',');
+            canvas.dataset.seriesCount = String(datasets.length);
+            canvas.dataset.series = datasets.map(d => d.label).join('|');
+            canvas.dataset.selectedCategory = selectedValue;
+
+            $filter.off('change.monthlyAS').on('change.monthlyAS', function() { renderMonthlyCategoryAS($(this).val()); });
+        }
+
         window.renderGMV = function() {
             if (!window.validRowsGMV || window.validRowsGMV.length === 0) {
                 $('#gmv-warning').show();
@@ -724,6 +846,8 @@
             } else {
                 $('#gmv-warning').hide();
             }
+
+            renderMonthlyCategoryAS($('#monthlyCategoryASFilter').val() || '__TOP__');
 
             let gmvMarcaCatMap = {};
             let localCategoriaASMap = {};
@@ -1057,8 +1181,6 @@
                 </tr>`;
             });
 
-            renderTopOpportunities(copilotRows);
-
             if ($.fn.DataTable.isDataTable('#exhCatTable')) {
                 $('#exhCatTable').DataTable().destroy();
             }
@@ -1083,8 +1205,18 @@
                 const idx = $(this).find('.action-button').attr('data-index');
                 openCopilotAction(Number(idx));
             });
-            $('#copilotGerenciaFilter').off('change').on('change', function(){ copilotTable.draw(); });
-            $('#copilotClearFilters').off('click').on('click', function(){ $('#copilotGerenciaFilter').val(''); copilotTable.draw(); });
+            const applyCopilotGerenciaFilter = () => {
+                const selected = $('#copilotGerenciaFilter').val() || '';
+                copilotTable.draw();
+                const filteredRows = selected ? copilotRows.filter(r => (r.gerencia || 'SIN ASIGNAR') === selected) : copilotRows;
+                renderTopOpportunities(filteredRows);
+            };
+            $('#copilotGerenciaFilter').off('change').on('change', applyCopilotGerenciaFilter);
+            $('#copilotClearFilters').off('click').on('click', function(){
+                $('#copilotGerenciaFilter').val('');
+                applyCopilotGerenciaFilter();
+            });
+            applyCopilotGerenciaFilter();
         };
 
 

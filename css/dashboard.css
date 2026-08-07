@@ -103,8 +103,32 @@
 .copilot-hero { display:grid; grid-template-columns: 1.2fr 0.8fr; gap:1rem; margin-bottom:1.5rem; }
 @media (max-width: 900px){ .copilot-hero { grid-template-columns: 1fr; } }
 .opportunity-strip { display:grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap:0.75rem; }
+.opportunity-grid { display:grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap:0.75rem; margin: 0 0 1.25rem; }
 @media (max-width: 1000px){ .opportunity-strip { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+@media (max-width: 1200px){ .opportunity-grid { grid-template-columns: repeat(3, minmax(0,1fr)); } }
+@media (max-width: 760px){ .opportunity-grid { grid-template-columns: 1fr; } }
 .opportunity-card { background: rgba(15,23,42,0.65); border: 1px solid rgba(148,163,184,0.18); border-radius: 14px; padding: 0.9rem; min-height: 110px; }
+.opportunity-card { min-width: 0; }
+#tab-copiloto .card-header-flex > div { display:flex; gap:.55rem; align-items:center; flex-wrap:wrap; }
+#copilotGerenciaFilter, #copilotClearFilters, #tab-copiloto .card-header-flex button {
+  min-height: 38px; border-radius: 9px; border:1px solid rgba(148,163,184,.35);
+  background:#0F172A; color:#E2E8F0; padding:.45rem .7rem; font-weight:650;
+}
+#copilotGerenciaFilter { min-width: 190px; }
+#copilotClearFilters, #tab-copiloto .card-header-flex button { cursor:pointer; }
+#copilotClearFilters:hover, #tab-copiloto .card-header-flex button:hover { border-color:#818CF8; color:#FFFFFF; }
+.category-chart-heading { display:flex; flex-direction:column; gap:.45rem; min-width:0; }
+.category-chart-heading .card-title { margin:0; line-height:1.25; }
+.chart-helper { color:var(--text-muted); margin:0; font-size:.88rem; line-height:1.4; }
+.chart-data-status { margin:0; color:#FCD34D; font-size:.82rem; line-height:1.4; }
+.category-chart-filter { display:flex; flex-direction:column; gap:.35rem; color:var(--text-muted); font-size:.78rem; font-weight:700; }
+#monthlyCategoryASFilter { min-width:260px; min-height:38px; border-radius:9px; border:1px solid rgba(148,163,184,.35); background:#0F172A; color:#E2E8F0; padding:.45rem .7rem; }
+.category-as-chart-container { height:420px; }
+@media (max-width:760px) {
+  .category-as-evolution-card .card-header-flex { align-items:stretch; }
+  #monthlyCategoryASFilter { width:100%; min-width:0; }
+  .category-as-chart-container { height:360px; }
+}
 .opportunity-rank { color: var(--accent); font-weight:800; font-size:0.85rem; margin-bottom:0.35rem; }
 .opportunity-name { color: var(--text-main); font-weight:800; font-size:0.95rem; line-height:1.1; }
 .opportunity-meta { color: var(--text-muted); font-size:0.78rem; margin-top:0.4rem; line-height:1.25; }
