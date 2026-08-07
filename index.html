@@ -223,9 +223,10 @@
 
         <div class="card category-as-evolution-card" style="margin-bottom: 2rem;">
             <div class="card-header-flex">
-                <div>
+                <div class="category-chart-heading">
                     <h2 class="card-title">Evolución mensual del A/S Ratio por categoría</h2>
                     <p class="chart-helper">Inversión Retail Media ÷ GMV de cada mes de 2026, hasta el último mes cerrado.</p>
+                    <p id="monthlyCategoryASDataStatus" class="chart-data-status"></p>
                 </div>
                 <label class="category-chart-filter">Categoría
                     <select id="monthlyCategoryASFilter">
@@ -1228,7 +1229,7 @@
             window.dispatchEvent(new Event('resize'));
         }
     </script>
-    <script src="js/app-v4.js?v=4.2.0"></script>
+    <script src="js/app-v4.js?v=4.2.1"></script>
 </div> <!-- Close Tab 2 -->
 </div> <!-- Close container -->
 </body>

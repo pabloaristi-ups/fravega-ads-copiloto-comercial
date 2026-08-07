@@ -758,6 +758,8 @@
 
             const cutoffMonth = window.masterDataset ? window.masterDataset.cutoffMonth : 12;
             const monthLabels = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'].slice(0, cutoffMonth);
+            const monthlyInvestmentTotals = new Array(cutoffMonth).fill(0);
+            const monthlyGmvTotals = new Array(cutoffMonth).fill(0);
             const categories = new Map();
             const ensureCategory = row => {
                 const key = row.categoriaKey || normalizeKey(row.categoria);
@@ -769,11 +771,24 @@
             window.validRowsGMV.filter(r => r.anio === 2026 && r.mes >= 1 && r.mes <= cutoffMonth).forEach(r => {
                 const category = ensureCategory(r);
                 if (category) category.gmv[r.mes - 1] += r.gmv;
+                monthlyGmvTotals[r.mes - 1] += r.gmv;
             });
             window.validRows.filter(r => r.anio === 2026 && r.mes >= 1 && r.mes <= cutoffMonth).forEach(r => {
                 const category = ensureCategory(r);
                 if (category) category.inv[r.mes - 1] += r.inv;
+                monthlyInvestmentTotals[r.mes - 1] += r.inv;
             });
+
+            const missingGmvMonths = monthLabels.filter((label, index) => monthlyInvestmentTotals[index] > 0 && monthlyGmvTotals[index] === 0);
+            const lastGmvMonthIndex = monthlyGmvTotals.reduce((last, value, index) => value !== 0 ? index : last, -1);
+            if (missingGmvMonths.length) {
+                const pendingInvestment = monthlyInvestmentTotals
+                    .filter((value, index) => monthlyInvestmentTotals[index] > 0 && monthlyGmvTotals[index] === 0)
+                    .reduce((sum, value) => sum + value, 0);
+                $('#monthlyCategoryASDataStatus').text(`GMV disponible hasta ${lastGmvMonthIndex >= 0 ? monthLabels[lastGmvMonthIndex] : 'sin datos'}. ${missingGmvMonths.join(', ')} tiene ${formatMoney(pendingInvestment)} de inversión, pero aún no tiene GMV en la fuente; el ratio queda pendiente.`).show();
+            } else {
+                $('#monthlyCategoryASDataStatus').text(`Inversión y GMV disponibles hasta ${monthLabels[cutoffMonth - 1]}.`).show();
+            }
 
             const categoryList = Array.from(categories.values())
                 .filter(c => c.gmv.some(v => v > 0) || c.inv.some(v => v > 0))

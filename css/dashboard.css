@@ -117,7 +117,10 @@
 #copilotGerenciaFilter { min-width: 190px; }
 #copilotClearFilters, #tab-copiloto .card-header-flex button { cursor:pointer; }
 #copilotClearFilters:hover, #tab-copiloto .card-header-flex button:hover { border-color:#818CF8; color:#FFFFFF; }
-.chart-helper { color:var(--text-muted); margin:-.8rem 0 0; font-size:.88rem; }
+.category-chart-heading { display:flex; flex-direction:column; gap:.45rem; min-width:0; }
+.category-chart-heading .card-title { margin:0; line-height:1.25; }
+.chart-helper { color:var(--text-muted); margin:0; font-size:.88rem; line-height:1.4; }
+.chart-data-status { margin:0; color:#FCD34D; font-size:.82rem; line-height:1.4; }
 .category-chart-filter { display:flex; flex-direction:column; gap:.35rem; color:var(--text-muted); font-size:.78rem; font-weight:700; }
 #monthlyCategoryASFilter { min-width:260px; min-height:38px; border-radius:9px; border:1px solid rgba(148,163,184,.35); background:#0F172A; color:#E2E8F0; padding:.45rem .7rem; }
 .category-as-chart-container { height:420px; }
