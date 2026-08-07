@@ -117,6 +117,15 @@
 #copilotGerenciaFilter { min-width: 190px; }
 #copilotClearFilters, #tab-copiloto .card-header-flex button { cursor:pointer; }
 #copilotClearFilters:hover, #tab-copiloto .card-header-flex button:hover { border-color:#818CF8; color:#FFFFFF; }
+.chart-helper { color:var(--text-muted); margin:-.8rem 0 0; font-size:.88rem; }
+.category-chart-filter { display:flex; flex-direction:column; gap:.35rem; color:var(--text-muted); font-size:.78rem; font-weight:700; }
+#monthlyCategoryASFilter { min-width:260px; min-height:38px; border-radius:9px; border:1px solid rgba(148,163,184,.35); background:#0F172A; color:#E2E8F0; padding:.45rem .7rem; }
+.category-as-chart-container { height:420px; }
+@media (max-width:760px) {
+  .category-as-evolution-card .card-header-flex { align-items:stretch; }
+  #monthlyCategoryASFilter { width:100%; min-width:0; }
+  .category-as-chart-container { height:360px; }
+}
 .opportunity-rank { color: var(--accent); font-weight:800; font-size:0.85rem; margin-bottom:0.35rem; }
 .opportunity-name { color: var(--text-main); font-weight:800; font-size:0.95rem; line-height:1.1; }
 .opportunity-meta { color: var(--text-muted); font-size:0.78rem; margin-top:0.4rem; line-height:1.25; }

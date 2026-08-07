@@ -751,6 +751,79 @@
 
         let gmvChart;
 
+        function renderMonthlyCategoryAS(selectedCategoryKey = '__TOP__') {
+            const canvas = document.getElementById('monthlyCategoryASChart');
+            const $filter = $('#monthlyCategoryASFilter');
+            if (!canvas || !$filter.length) return;
+
+            const cutoffMonth = window.masterDataset ? window.masterDataset.cutoffMonth : 12;
+            const monthLabels = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'].slice(0, cutoffMonth);
+            const categories = new Map();
+            const ensureCategory = row => {
+                const key = row.categoriaKey || normalizeKey(row.categoria);
+                if (!key) return null;
+                if (!categories.has(key)) categories.set(key, { key, name: displayCategory(row.categoria), inv: new Array(cutoffMonth).fill(0), gmv: new Array(cutoffMonth).fill(0) });
+                return categories.get(key);
+            };
+
+            window.validRowsGMV.filter(r => r.anio === 2026 && r.mes >= 1 && r.mes <= cutoffMonth).forEach(r => {
+                const category = ensureCategory(r);
+                if (category) category.gmv[r.mes - 1] += r.gmv;
+            });
+            window.validRows.filter(r => r.anio === 2026 && r.mes >= 1 && r.mes <= cutoffMonth).forEach(r => {
+                const category = ensureCategory(r);
+                if (category) category.inv[r.mes - 1] += r.inv;
+            });
+
+            const categoryList = Array.from(categories.values())
+                .filter(c => c.gmv.some(v => v > 0) || c.inv.some(v => v > 0))
+                .sort((a, b) => b.gmv.reduce((s, v) => s + v, 0) - a.gmv.reduce((s, v) => s + v, 0));
+            const currentValue = selectedCategoryKey || $filter.val() || '__TOP__';
+            $filter.empty().append('<option value="__TOP__">Top 8 categorías por GMV</option>');
+            categoryList.forEach(c => $filter.append($('<option>', { value: c.key, text: c.name })));
+            $filter.val(categoryList.some(c => c.key === currentValue) ? currentValue : '__TOP__');
+
+            const selectedValue = $filter.val();
+            const displayedCategories = selectedValue === '__TOP__' ? categoryList.slice(0, 8) : categoryList.filter(c => c.key === selectedValue);
+            const colors = ['#818CF8', '#F59E0B', '#10B981', '#F472B6', '#38BDF8', '#A78BFA', '#F87171', '#FACC15'];
+            const datasets = displayedCategories.map((c, index) => ({
+                label: c.name,
+                data: c.gmv.map((gmv, monthIndex) => gmv > 0 ? (c.inv[monthIndex] / gmv) * 100 : null),
+                borderColor: colors[index % colors.length],
+                backgroundColor: colors[index % colors.length],
+                borderWidth: selectedValue === '__TOP__' ? 2 : 3,
+                pointRadius: selectedValue === '__TOP__' ? 3 : 4,
+                pointHoverRadius: 6,
+                tension: 0.28,
+                spanGaps: false
+            }));
+
+            if (window.monthlyCategoryASChartInstance) window.monthlyCategoryASChartInstance.destroy();
+            window.monthlyCategoryASChartInstance = new Chart(canvas.getContext('2d'), {
+                type: 'line',
+                data: { labels: monthLabels, datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { position: 'bottom', labels: { color: '#CBD5E1', usePointStyle: true, padding: 16 } },
+                        tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y === null ? 'Sin GMV' : ctx.parsed.y.toFixed(2) + '%'}` } }
+                    },
+                    scales: {
+                        x: { ticks: { color: '#94A3B8' }, grid: { color: 'rgba(148,163,184,.08)' } },
+                        y: { beginAtZero: true, ticks: { color: '#94A3B8', callback: value => Number(value).toFixed(2) + '%' }, grid: { color: 'rgba(148,163,184,.12)' }, title: { display: true, text: 'A/S Ratio mensual', color: '#CBD5E1' } }
+                    }
+                }
+            });
+            canvas.dataset.months = monthLabels.join(',');
+            canvas.dataset.seriesCount = String(datasets.length);
+            canvas.dataset.series = datasets.map(d => d.label).join('|');
+            canvas.dataset.selectedCategory = selectedValue;
+
+            $filter.off('change.monthlyAS').on('change.monthlyAS', function() { renderMonthlyCategoryAS($(this).val()); });
+        }
+
         window.renderGMV = function() {
             if (!window.validRowsGMV || window.validRowsGMV.length === 0) {
                 $('#gmv-warning').show();
@@ -758,6 +831,8 @@
             } else {
                 $('#gmv-warning').hide();
             }
+
+            renderMonthlyCategoryAS($('#monthlyCategoryASFilter').val() || '__TOP__');
 
             let gmvMarcaCatMap = {};
             let localCategoriaASMap = {};

@@ -220,6 +220,23 @@
         <div id="gmv-warning" style="display:none; background: rgba(239, 68, 68, 0.1); border: 1px solid var(--negative); color: var(--negative); padding: 1rem; border-radius: 8px; margin-bottom: 2rem;">
             ⚠️ <b>Advertencia:</b> No se detectaron datos válidos en la pestaña "GMV" de Google Sheets. Asegúrate de haber creado la pestaña y pegado el contenido del archivo `aggregated_gmv.csv` correctamente.
         </div>
+
+        <div class="card category-as-evolution-card" style="margin-bottom: 2rem;">
+            <div class="card-header-flex">
+                <div>
+                    <h2 class="card-title">Evolución mensual del A/S Ratio por categoría</h2>
+                    <p class="chart-helper">Inversión Retail Media ÷ GMV de cada mes de 2026, hasta el último mes cerrado.</p>
+                </div>
+                <label class="category-chart-filter">Categoría
+                    <select id="monthlyCategoryASFilter">
+                        <option value="__TOP__">Top 8 categorías por GMV</option>
+                    </select>
+                </label>
+            </div>
+            <div class="chart-container category-as-chart-container">
+                <canvas id="monthlyCategoryASChart"></canvas>
+            </div>
+        </div>
         
         <div class="grid-2">
             <div class="card">
@@ -1211,7 +1228,7 @@
             window.dispatchEvent(new Event('resize'));
         }
     </script>
-    <script src="js/app-v4.js?v=4.1.1"></script>
+    <script src="js/app-v4.js?v=4.2.0"></script>
 </div> <!-- Close Tab 2 -->
 </div> <!-- Close container -->
 </body>
